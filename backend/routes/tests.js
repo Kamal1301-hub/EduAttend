@@ -65,7 +65,7 @@ router.get('/:id', instituteOnly, async (req, res) => {
     // Get all students of the batch + their result (if entered)
     const [students] = await db.query(
       `SELECT s.id AS student_id, s.name, s.class, s.aadhar,
-              tr.marks_scored, tr.grade, tr.remarks, tr.updated_at AS result_updated
+              tr.marks_scored, tr.component_scores, tr.grade, tr.remarks, tr.updated_at AS result_updated
        FROM   students s
        LEFT JOIN test_results tr ON tr.test_id = ? AND tr.student_id = s.id
        WHERE  s.institute_id = ?
@@ -83,14 +83,14 @@ router.get('/:id', instituteOnly, async (req, res) => {
 // POST /api/tests — create a new test
 router.post('/', instituteOnly, async (req, res) => {
   try {
-    const { title, subject, testDate, totalMarks, batchId, description } = req.body;
-    if (!title || !subject || !testDate || !totalMarks)
+    const { title, subject, testDate, totalMarks, batchId, description, isCombined, components } = req.body;
+    if (!title || (!isCombined && !subject) || !testDate || !totalMarks)
       return res.status(400).json({ success: false, message: 'Title, subject, date and total marks are required' });
 
     const [result] = await db.query(
-      `INSERT INTO tests (institute_id, batch_id, title, subject, test_date, total_marks, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, batchId || null, title, subject, testDate, totalMarks, description || '']
+      `INSERT INTO tests (institute_id, batch_id, title, subject, is_combined, components, test_date, total_marks, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, batchId || null, title, subject || '', isCombined ? 1 : 0, components || null, testDate, totalMarks, description || '']
     );
     res.status(201).json({ success: true, message: 'Test created', data: { id: result.insertId } });
   } catch (err) {
@@ -104,11 +104,13 @@ router.put('/:id', instituteOnly, async (req, res) => {
     const [rows] = await db.query('SELECT * FROM tests WHERE id = ? AND institute_id = ?', [req.params.id, req.user.id]);
     if (!rows.length) return res.status(404).json({ success: false, message: 'Test not found' });
     const t = rows[0];
-    const { title, subject, testDate, totalMarks, batchId, description } = req.body;
+    const { title, subject, testDate, totalMarks, batchId, description, isCombined, components } = req.body;
     await db.query(
-      `UPDATE tests SET title=?, subject=?, test_date=?, total_marks=?, batch_id=?, description=?, updated_at=NOW()
+      `UPDATE tests SET title=?, subject=?, is_combined=?, components=?, test_date=?, total_marks=?, batch_id=?, description=?, updated_at=NOW()
        WHERE id=? AND institute_id=?`,
-      [title||t.title, subject||t.subject, testDate||t.test_date, totalMarks||t.total_marks,
+      [title||t.title, subject||t.subject, isCombined !== undefined ? (isCombined?1:0) : t.is_combined,
+       components !== undefined ? components : t.components,
+       testDate||t.test_date, totalMarks||t.total_marks,
        batchId !== undefined ? (batchId||null) : t.batch_id,
        description !== undefined ? description : t.description,
        req.params.id, req.user.id]
@@ -149,14 +151,15 @@ router.post('/:id/results', instituteOnly, async (req, res) => {
       if (isNaN(marks) || marks < 0 || marks > parseFloat(test.total_marks)) continue;
       const g = grade(marks, test.total_marks);
       await db.query(
-        `INSERT INTO test_results (test_id, student_id, institute_id, marks_scored, grade, remarks)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO test_results (test_id, student_id, institute_id, marks_scored, component_scores, grade, remarks)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
-           marks_scored = VALUES(marks_scored),
-           grade        = VALUES(grade),
-           remarks      = VALUES(remarks),
-           updated_at   = NOW()`,
-        [req.params.id, r.studentId, req.user.id, marks, g, r.remarks || '']
+           marks_scored     = VALUES(marks_scored),
+           component_scores = VALUES(component_scores),
+           grade            = VALUES(grade),
+           remarks          = VALUES(remarks),
+           updated_at       = NOW()`,
+        [req.params.id, r.studentId, req.user.id, marks, r.componentScores || null, g, r.remarks || '']
       );
       saved++;
     }
@@ -255,8 +258,8 @@ router.get('/student/portal', anyAuth, async (req, res) => {
     // Test results — each test with date, subject, marks, total, grade
     const [results] = await db.query(
       `SELECT
-         tr.id, tr.marks_scored, tr.grade, tr.remarks, tr.updated_at,
-         t.title, t.subject, t.test_date, t.total_marks,
+         tr.id, tr.marks_scored, tr.component_scores, tr.grade, tr.remarks, tr.updated_at,
+         t.title, t.subject, t.is_combined, t.components, t.test_date, t.total_marks,
          b.name AS batch_name
        FROM   test_results tr
        JOIN   tests    t ON t.id  = tr.test_id

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { studentsAPI, batchesAPI } from '../../api';
+import { studentsAPI, batchesAPI, messagesAPI } from '../../api';
 import { Modal, ConfirmModal, Spinner, EmptyState, Avatar, StreamBadge, ClassBadge } from '../../components/UI';
+import { useAuth } from '../../context/AuthContext';
 
 const INIT = { name:'', aadhar:'', classLevel:'8', board:'CBSE', stream:'Board', batchId:'', parentName:'', parentPhone:'', parentEmail:'' };
 
@@ -56,6 +57,13 @@ export default function InstStudents() {
   const [newCreds, setNewCreds]   = useState(null); // shown after add
   const [sendingCreds, setSC]     = useState(false);
   const [resettingPwd, setRP]     = useState(false);
+
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [promoClass, setPromoClass] = useState('');
+  const [promoBatch, setPromoBatch] = useState('');
+  const [btnLoading, setBtnLoading] = useState(false);
+  const { user } = useAuth();
 
   const load = useCallback(async () => {
     try {
@@ -113,8 +121,22 @@ export default function InstStudents() {
   };
 
   const handleDelete = async () => {
-    try { await studentsAPI.delete(modal.data.id); toast.success('Student deleted'); setModal(null); await load(); }
-    catch { toast.error('Failed to delete'); }
+    try {
+      await studentsAPI.delete(modal.data.id);
+      toast.success('Student deleted');
+      setModal(null); await load(); setSelectedIds([]);
+    } catch { toast.error('Failed to delete'); }
+  };
+
+  const handlePromote = async () => {
+    if (!promoClass) { toast.error('Select target class'); return; }
+    setBtnLoading(true);
+    try {
+      await studentsAPI.promote({ studentIds: selectedIds, targetClass: promoClass, targetBatchId: promoBatch || null });
+      toast.success(`Promoted ${selectedIds.length} students to Class ${promoClass}`);
+      setModal(null); setSelectedIds([]); await load();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to promote'); }
+    finally { setBtnLoading(false); }
   };
 
   const handleResendCreds = async (studentId) => {
@@ -137,16 +159,27 @@ export default function InstStudents() {
       const failed = r.data?.data?.failed ?? 0;
       if (failed > 0) toast.success(`Password reset for ${name}. Notification: ${sent} sent, ${failed} failed`);
       else toast.success(`Password reset to default for ${name}`);
-      // Refresh viewData
       const fresh = await studentsAPI.getOne(studentId);
       setViewData(fresh.data.data);
     } catch(err) { toast.error(err.response?.data?.message || 'Failed to reset'); }
     finally { setRP(false); }
   };
 
+  const handleSendMessage = async (studentId, type, subject, message) => {
+    setSendingMsg(true);
+    try {
+      await messagesAPI.sendIndividual(studentId, { type, subject, message });
+      toast.success('Message sent to parent');
+      setModal(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send message');
+    } finally {
+      setSendingMsg(false);
+    }
+  };
+
   if (loading) return <Spinner />;
 
-  // ── FORM ────────────────────────────────────────────────────
   const studentForm = (
     <>
       <div className="section-label">Student Details</div>
@@ -193,8 +226,15 @@ export default function InstStudents() {
   return (
     <div className="fade-in">
       <div className="topbar">
-        <div><h2>Students</h2><p>Manage enrolled students</p></div>
-        <button className="btn btn-blue btn-sm" onClick={openAdd}>＋ Add Student</button>
+        <div><h2>Students</h2><p>Manage enrolled students and parents</p></div>
+        <div style={{ display:'flex', gap:10 }}>
+          {selectedIds.length > 0 && (
+            <button className="btn btn-navy btn-sm" onClick={() => { setPromoClass(''); setPromoBatch(''); setModal({ type:'promote' }); }}>
+              🎓 Promote ({selectedIds.length})
+            </button>
+          )}
+          <button className="btn btn-blue btn-sm" onClick={openAdd}>＋ Add Student</button>
+        </div>
       </div>
       <div className="page-content">
 
@@ -211,11 +251,20 @@ export default function InstStudents() {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Student</th><th>Class</th><th>Board</th><th>Stream</th><th>Batch</th><th>Login ID</th><th>Parent</th><th>Actions</th></tr>
+                  <tr>
+                    <th style={{ width: 40 }}>
+                      <input type="checkbox" checked={selectedIds.length === filtered.length && filtered.length > 0} 
+                        onChange={e => setSelectedIds(e.target.checked ? filtered.map(s => s.id) : [])} />
+                    </th>
+                    <th>Student</th><th>Class</th><th>Board</th><th>Stream</th><th>Batch</th><th>Login ID</th><th>Parent</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                   {filtered.map(s => (
-                    <tr key={s.id}>
+                    <tr key={s.id} style={{ background: selectedIds.includes(s.id) ? 'var(--blue-bg)' : '' }}>
+                      <td>
+                        <input type="checkbox" checked={selectedIds.includes(s.id)} 
+                          onChange={e => setSelectedIds(prev => e.target.checked ? [...prev, s.id] : prev.filter(id => id !== s.id))} />
+                      </td>
                       <td>
                         <div style={{ display:'flex', alignItems:'center', gap:9 }}>
                           <Avatar name={s.name} size={34} />
@@ -240,6 +289,7 @@ export default function InstStudents() {
                       </td>
                       <td>
                         <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                          <button className="btn btn-sm btn-navy" onClick={() => setModal({ type: 'message', data: s })}>💬 Message</button>
                           <button className="btn btn-sm" onClick={() => openView(s)}>View</button>
                           <button className="btn btn-sm" onClick={() => openEdit(s)}>Edit</button>
                           <button className="btn btn-sm btn-red" onClick={() => setModal({ type:'confirmDelete', data:s })}>Delete</button>
@@ -254,7 +304,6 @@ export default function InstStudents() {
         </div>
       </div>
 
-      {/* ── ADD / EDIT MODAL ── */}
       {(modal?.type === 'add' || modal?.type === 'edit') && (
         <Modal title={modal.type === 'add' ? 'Add New Student' : 'Edit Student'} onClose={() => setModal(null)}
           footer={<><button className="btn" onClick={() => setModal(null)}>Cancel</button><button className="btn btn-blue" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : modal.type === 'add' ? 'Register & Generate Credentials' : 'Save Changes'}</button></>}>
@@ -262,7 +311,6 @@ export default function InstStudents() {
         </Modal>
       )}
 
-      {/* ── CREDENTIALS PREVIEW (shown after new student added) ── */}
       {modal?.type === 'credsPreview' && newCreds && (
         <Modal title="Student Registered!" onClose={() => setModal(null)}
           footer={<button className="btn btn-blue" onClick={() => setModal(null)}>Done</button>}>
@@ -283,7 +331,6 @@ export default function InstStudents() {
         </Modal>
       )}
 
-      {/* ── VIEW STUDENT MODAL ── */}
       {modal?.type === 'view' && viewData && (
         <Modal title="Student Profile" onClose={() => setModal(null)} size={560}
           footer={<>
@@ -291,7 +338,6 @@ export default function InstStudents() {
             <button className="btn btn-blue" onClick={() => openEdit(viewData)}>Edit Student</button>
           </>}>
 
-          {/* Header */}
           <div style={{ display:'flex', alignItems:'center', gap:13, marginBottom:16 }}>
             <Avatar name={viewData.name} size={48} />
             <div style={{ flex:1 }}>
@@ -312,7 +358,6 @@ export default function InstStudents() {
             )}
           </div>
 
-          {/* Details */}
           <div className="divider" />
           {[
             ['Aadhar',       viewData.aadhar        || '—'],
@@ -330,7 +375,6 @@ export default function InstStudents() {
             </div>
           ))}
 
-          {/* ── CREDENTIALS SECTION ── */}
           <div style={{ marginTop:18 }}>
             <div style={{ fontSize:11, fontWeight:700, color:'var(--text3)', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>
               Login Credentials
@@ -339,7 +383,6 @@ export default function InstStudents() {
               <>
                 <CredBox loginId={viewData.student_login_id} defaultPassword="123456" mustChange={viewData.must_change_pass} />
 
-                {/* Action buttons */}
                 <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
                   <button className="btn btn-sm btn-blue" disabled={sendingCreds}
                     onClick={() => handleResendCreds(viewData.id)}>
@@ -364,11 +407,115 @@ export default function InstStudents() {
         </Modal>
       )}
 
-      {/* ── DELETE CONFIRM ── */}
+      {modal?.type === 'message' && (
+        <MessageModal
+          student={modal.data}
+          onClose={() => setModal(null)}
+          onSend={(type, sub, msg) => handleSendMessage(modal.data.id, type, sub, msg)}
+          sending={sendingMsg}
+          instName={user?.name || 'Institute'}
+        />
+      )}
+
       {modal?.type === 'confirmDelete' && (
         <ConfirmModal title="Delete Student" message={`Delete "${modal.data.name}"? This will permanently remove all their attendance records and test results.`}
           onConfirm={handleDelete} onClose={() => setModal(null)} danger />
       )}
+
+      {modal?.type === 'promote' && (
+        <Modal title="Promote Students — Next Academic Year" onClose={() => setModal(null)}
+          footer={<><button className="btn" onClick={() => setModal(null)}>Cancel</button><button className="btn btn-navy" onClick={handlePromote} disabled={btnLoading}>{btnLoading ? 'Promoting…' : `Promote ${selectedIds.length} Students`}</button></>}
+        >
+          <div style={{ marginBottom: 15, padding: 12, background: 'var(--blue-bg)', borderRadius: 10, fontSize: 13, color: 'var(--blue-text)', border: '1px solid var(--blue-border)' }}>
+            You are promoting <b>{selectedIds.length} students</b>. This will update their class and move them to the selected batch.
+          </div>
+          
+          <div className="form-group">
+            <label>Target Class (Promote To) *</label>
+            <select className="form-control" value={promoClass} onChange={e => setPromoClass(e.target.value)}>
+              <option value="">Select Next Class</option>
+              {['8','9','10','11','12','Alumni'].map(c => <option key={c} value={c}>{c === 'Alumni' ? 'Graduate / Alumni' : `Class ${c}`}</option>)}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Target Batch (Optional)</label>
+            <select className="form-control" value={promoBatch} onChange={e => setPromoBatch(e.target.value)}>
+              <option value="">No Batch / Move to General</option>
+              {batches.filter(b => b.class === promoClass || !promoClass).map(b => (
+                <option key={b.id} value={b.id}>{b.name} ({b.class})</option>
+              ))}
+            </select>
+          </div>
+          
+          <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 10 }}>
+            * Note: This action will not affect past attendance or test results. It only updates the student's current grade.
+          </p>
+        </Modal>
+      )}
     </div>
+  );
+}
+
+// ── INTERNAL COMPONENTS ───────────────────────────────────────
+
+function MessageModal({ student, onClose, onSend, sending, instName }) {
+  const [type, setType] = useState('custom');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [sub, setSub] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const getPreview = (sName) => {
+    const d = date || '[Date]', t = time || '[Time]', s = sub || (type === 'test' ? 'Unit Test' : type === 'holiday' ? '[Holiday]' : '');
+    const templates = {
+      test: `Dear Parent,\n\nThis is to inform you that a *${s}* is scheduled for your ward *${sName}* on *${d}* at *${t}*.\n\nKindly ensure they are well prepared.\n\nRegards,\n${instName}`,
+      ptm: `Dear Parent,\n\nYou are invited to attend the *Parent-Teacher Meeting (PTM)* regarding *${sName}* on *${d}* at *${t}*.\n\nVenue: ${instName}\n\nYour presence is important.\n\nRegards,\n${instName}`,
+      holiday: `Dear Parent,\n\nPlease note the institute will remain *closed on ${d}* for *${sName}* and all students on account of *${s}*.\n\nClasses will resume as normal thereafter.\n\nRegards,\n${instName}`,
+      custom: msg ? msg.replace(/{name}/g, sName) : 'Type your message below...',
+    };
+    return templates[type];
+  };
+
+  const handleSend = () => {
+    const finalSub = sub || (type === 'test' ? 'Upcoming Test' : type === 'ptm' ? 'PTM / Meeting' : type === 'holiday' ? 'Holiday Notice' : 'Custom Announcement');
+    onSend(type, finalSub, getPreview('{name}'));
+  };
+
+  return (
+    <Modal title={`Message to ${student.name}'s Parent`} onClose={onClose}
+      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-navy" onClick={handleSend} disabled={sending}>{sending ? 'Sending…' : '📤 Send SMS / WhatsApp'}</button></>}>
+      <div style={{ marginBottom: 15 }}>
+        <div className="section-label">Select Type</div>
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 5 }}>
+          {['custom', 'test', 'ptm', 'holiday'].map(t => (
+            <button key={t} onClick={() => setType(t)}
+              style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: type === t ? 'var(--blue-bg)' : 'var(--bg)', border: `1.5px solid ${type === t ? 'var(--blue)' : 'var(--border)'}`, color: type === t ? 'var(--blue-text)' : 'var(--text2)', transition: 'all 0.15s' }}>
+              {t.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="divider" />
+
+      {type !== 'custom' ? (
+        <div className="form-row">
+          <div className="form-group"><label>Date</label><input className="form-control" type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+          <div className="form-group"><label>Time</label><input className="form-control" type="time" value={time} onChange={e => setTime(e.target.value)} /></div>
+        </div>
+      ) : (
+        <div className="form-group"><label>Custom Message</label>
+          <textarea className="form-control" rows={3} placeholder="Use {name} for student name..." value={msg} onChange={e => setMsg(e.target.value)} />
+        </div>
+      )}
+
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 9, padding: '12px 15px', marginTop: 15 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 8 }}>Preview</div>
+        <div style={{ fontSize: 12, color: 'var(--text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+          {getPreview(student.name)}
+        </div>
+      </div>
+    </Modal>
   );
 }

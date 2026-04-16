@@ -18,8 +18,9 @@ function pctColor(p)    { return p>=75?'#16a34a':p>=50?'#d97706':'#dc2626'; }
 export default function StudentPortal() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab]         = useState('attendance'); // 'attendance' | 'results'
-  const [attFilter, setAF]    = useState('all');        // 'all' | 'P' | 'A' | 'L'
+  const [tab, setTab]         = useState('attendance'); 
+  const [attFilter, setAF]    = useState('all');
+  const [viewingTest, setVT]  = useState(null); 
   const { user, logout }      = useAuth();
   const navigate              = useNavigate();
 
@@ -245,7 +246,12 @@ export default function StudentPortal() {
                 {results.map((r,i) => {
                   const pct = Math.round((parseFloat(r.marks_scored)/parseFloat(r.total_marks))*100);
                   return (
-                    <div key={i} style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:14,padding:'18px 22px',boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+                    <div key={i} 
+                      onClick={() => setVT(r)}
+                      style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:14,padding:'18px 22px',boxShadow:'0 1px 4px rgba(0,0,0,0.05)',cursor:'pointer',transition:'transform 0.2s,boxShadow 0.2s' }}
+                      onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 1px 4px rgba(0,0,0,0.05)'; }}
+                    >
                       <div style={{ display:'flex',alignItems:'flex-start',gap:14,flexWrap:'wrap' }}>
                         {/* Grade circle */}
                         <div style={{ width:54,height:54,borderRadius:'50%',background:gradeBg(r.grade),border:`2px solid ${gradeColor(r.grade)}44`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
@@ -294,6 +300,79 @@ export default function StudentPortal() {
         )}
 
       </div>
+
+      {viewingTest && (
+        <div style={{ position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:20,backdropFilter:'blur(4px)' }}>
+          <div className="fade-in" style={{ background:'#fff',borderRadius:20,width:'100%',maxWidth:520,maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ padding:'20px 24px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+              <div>
+                <div style={{ fontSize:16,fontWeight:700,color:'#0f172a' }}>{viewingTest.title} Report</div>
+                <div style={{ fontSize:12,color:'#64748b',marginTop:2 }}>{new Date(viewingTest.test_date).toLocaleDateString('en-IN', { day:'numeric',month:'long',year:'numeric' })}</div>
+              </div>
+              <button onClick={()=>setVT(null)} style={{ background:'#f1f5f9',border:'none',width:30,height:30,borderRadius:'50%',cursor:'pointer',fontSize:18,color:'#64748b' }}>×</button>
+            </div>
+            
+            <div style={{ padding:24,overflowY:'auto' }}>
+              {/* Summary */}
+              <div style={{ background:'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',borderRadius:16,padding:20,marginBottom:24,textAlign:'center',border:'1px solid #bfdbfe' }}>
+                <div style={{ display:'flex',justifyContent:'center',marginBottom:12 }}>
+                  <div style={{ width:64,height:64,borderRadius:'50%',background:gradeBg(viewingTest.grade),border:`3px solid ${gradeColor(viewingTest.grade)}44`,display:'flex',alignItems:'center',justifyContent:'center' }}>
+                    <span style={{ fontSize:22,fontWeight:800,color:gradeColor(viewingTest.grade) }}>{viewingTest.grade}</span>
+                  </div>
+                </div>
+                <div style={{ fontSize:32,fontWeight:800,color:'#1e3a8a',letterSpacing:-1 }}>{viewingTest.marks_scored} <span style={{ fontSize:16,color:'#64748b' }}>/ {viewingTest.total_marks}</span></div>
+                <div style={{ fontSize:14,fontWeight:600,color:'#3b82f6',marginTop:2 }}>Overall Percentage: {Math.round((parseFloat(viewingTest.marks_scored)/parseFloat(viewingTest.total_marks))*100)}%</div>
+              </div>
+
+              {/* Subject Breakdown */}
+              {viewingTest.is_combined ? (
+                <>
+                  <div style={{ fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:0.8,marginBottom:12 }}>Subject-wise Breakdown</div>
+                  <div style={{ display:'flex',flexDirection:'column',gap:12 }}>
+                    {(viewingTest.components || []).map((c, idx) => {
+                      const scored = viewingTest.component_scores?.[c.subject] || 0;
+                      const cPct = Math.round((parseFloat(scored)/parseFloat(c.total))*100);
+                      const cG = ['A+','A','B+','B','C','D','F'][cPct>=90?0:cPct>=80?1:cPct>=70?2:cPct>=60?3:cPct>=50?4:cPct>=35?5:6];
+                      return (
+                        <div key={idx} style={{ background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:12,padding:'12px 14px' }}>
+                          <div style={{ display:'flex',justifyContent:'space-between',marginBottom:8,alignItems:'center' }}>
+                            <div style={{ fontSize:13,fontWeight:700,color:'#334155' }}>{c.subject}</div>
+                            <div style={{ fontSize:14,fontWeight:700,color:pctColor(cPct) }}>{scored} <span style={{ fontSize:11,color:'#94a3b8' }}>/ {c.total}</span></div>
+                          </div>
+                          <div style={{ height:6,background:'#e2e8f0',borderRadius:3,overflow:'hidden',marginBottom:6 }}>
+                            <div style={{ width:`${cPct}%`,height:'100%',background:pctColor(cPct),borderRadius:3 }} />
+                          </div>
+                          <div style={{ display:'flex',justifyContent:'space-between',fontSize:10,fontWeight:700,color:'#64748b' }}>
+                            <span>{cPct}% Scored</span>
+                            <span style={{ color:gradeColor(cG) }}>Grade: {cG}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding:12,background:'#f8fafc',borderRadius:12,border:'1px dashed #cbd5e1',textAlign:'center' }}>
+                  <div style={{ fontSize:13,color:'#64748b' }}>Standard Test: {viewingTest.subject}</div>
+                </div>
+              )}
+
+              {viewingTest.remarks && (
+                <div style={{ marginTop:24 }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:0.8,marginBottom:8 }}>Remarks</div>
+                  <div style={{ background:'#fffbeb',border:'1px solid #fde68a',padding:12,borderRadius:10,fontSize:13,color:'#92400e',fontStyle:'italic' }}>
+                    "{viewingTest.remarks}"
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding:'16px 24px',background:'#f8fafc',borderTop:'1px solid #f1f5f9',textAlign:'right' }}>
+              <button onClick={()=>setVT(null)} style={{ padding:'8px 20px',background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,fontWeight:600,color:'#475569',cursor:'pointer' }}>Close Report</button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );

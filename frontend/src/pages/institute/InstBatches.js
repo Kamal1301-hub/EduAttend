@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { batchesAPI } from '../../api';
 import { Modal, ConfirmModal, Spinner, EmptyState, StreamBadge, ClassBadge } from '../../components/UI';
+import { studentsAPI } from '../../api';
 
 const INIT = { name: '', classLevel: '8', board: 'CBSE', stream: 'Board', timing: '' };
 
@@ -11,6 +12,8 @@ export default function InstBatches() {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(INIT);
   const [saving, setSaving] = useState(false);
+  const [batchStudents, setBatchStudents] = useState([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   const load = useCallback(async () => {
     try { const r = await batchesAPI.getAll(); setBatches(r.data.data); }
@@ -42,6 +45,16 @@ export default function InstBatches() {
     try { await batchesAPI.delete(modal.data.id); toast.success('Batch deleted'); setModal(null); await load(); }
     catch { toast.error('Failed to delete'); }
   };
+  
+  const openBatchStudents = async (batch) => {
+    setModal({ type: 'viewStudents', data: batch });
+    setLoadingStudents(true);
+    try {
+      const r = await studentsAPI.getAll({ batchId: batch.id });
+      setBatchStudents(r.data.data);
+    } catch { toast.error('Failed to load students'); }
+    finally { setLoadingStudents(false); }
+  };
 
   if (loading) return <Spinner />;
 
@@ -65,9 +78,14 @@ export default function InstBatches() {
                       <td><span className="badge bp">{b.board}</span></td>
                       <td>{show11_12(b.class) && b.stream ? <StreamBadge stream={b.stream} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
                       <td style={{ color: 'var(--text2)' }}>{b.timing || '—'}</td>
-                      <td style={{ fontWeight: 600 }}>{b.student_count || 0}</td>
+                      <td style={{ fontWeight: 600 }}>
+                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--blue-text)', fontSize: 13 }} onClick={() => openBatchStudents(b)}>
+                          👤 {b.student_count || 0} students
+                        </button>
+                      </td>
                       <td>
                         <div style={{ display: 'flex', gap: 5 }}>
+                          <button className="btn btn-sm btn-ghost" title="View Students" onClick={() => openBatchStudents(b)}>👁️</button>
                           <button className="btn btn-sm" onClick={() => { setForm({ name: b.name, classLevel: b.class, board: b.board, stream: b.stream || 'Board', timing: b.timing || '' }); setModal({ type: 'edit', data: b }); }}>Edit</button>
                           <button className="btn btn-sm btn-red" onClick={() => setModal({ type: 'confirmDelete', data: b })}>Delete</button>
                         </div>
@@ -106,6 +124,33 @@ export default function InstBatches() {
 
       {modal?.type === 'confirmDelete' && (
         <ConfirmModal title="Delete Batch" message={`Delete "${modal.data.name}"? Students in this batch will become unassigned.`} onConfirm={handleDelete} onClose={() => setModal(null)} danger />
+      )}
+
+      {modal?.type === 'viewStudents' && (
+        <Modal title={`Enrolled Students — ${modal.data.name}`} onClose={() => setModal(null)} width={700}>
+          {loadingStudents ? <Spinner /> : (
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              {batchStudents.length === 0 ? <EmptyState icon="👤" message="No students enrolled in this batch yet." /> : (
+                <div className="table-wrap">
+                  <table style={{ fontSize: 13 }}>
+                    <thead><tr><th>#</th><th>Student ID</th><th>Name</th><th>Parent Contact</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {batchStudents.map((s, idx) => (
+                        <tr key={s.id}>
+                          <td>{idx + 1}</td>
+                          <td style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text3)' }}>{s.student_login_id}</td>
+                          <td style={{ fontWeight: 600 }}>{s.name}</td>
+                          <td style={{ fontSize: 12 }}>{s.parent_phone}</td>
+                          <td><span className={`badge ${s.is_active ? 'bg' : 'br'}`} style={{ fontSize: 10 }}>{s.is_active ? 'Active' : 'Inactive'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );

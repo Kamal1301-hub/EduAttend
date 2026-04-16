@@ -3,6 +3,7 @@ const router  = express.Router();
 const bcrypt  = require('bcryptjs');
 const db      = require('../config/db');
 const { superAdminOnly } = require('../middleware/auth');
+const { notifyRecipients } = require('../services/notifications');
 
 // ── HELPERS ───────────────────────────────────────────────────
 function genLoginId(name, id) {
@@ -146,9 +147,29 @@ router.post('/', superAdminOnly, async (req, res) => {
       ['Institute registered', name.trim()]
     );
 
+    // ── SEND WELCOME NOTIFICATION ──
+    if (phone) {
+      try {
+        const welcomeMessage = `Hello ${name.trim()},\n\nWelcome to EduAttend! Your institute has been successfully registered.\n\nLogin ID: *${loginId}*\nPassword: *${plainPassword}*\n\nYou can now login and start managing your batches and students.\n\nBest Regards,\nEduAttend Team`;
+        
+        await notifyRecipients({
+          instituteId: realId,
+          type: 'credentials',
+          subject: 'Institute Registration - Welcome to EduAttend',
+          message: welcomeMessage,
+          recipients: [{
+            student_id: null,
+            parent_phone: phone.trim()
+          }]
+        });
+      } catch (err) {
+        console.error('Failed to send welcome message:', err.message);
+      }
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Institute registered successfully',
+      message: 'Institute registered successfully and notification sent.',
       data:    { id: realId, loginId, password: plainPassword, name: name.trim(), plan: plan || 'Standard' },
     });
   } catch (err) {
@@ -234,7 +255,27 @@ router.patch('/:id/reset-password', superAdminOnly, async (req, res) => {
       ['Password reset', rows[0].name]
     );
 
-    res.json({ success: true, message: 'Password reset successfully', newPassword: plainPassword });
+    // ── SEND RESET NOTIFICATION ──
+    if (rows[0].phone) {
+      try {
+        const resetMessage = `Hello ${rows[0].name},\n\nYour EduAttend login password has been reset by the administrator.\n\nNew Password: *${plainPassword}*\n\nPlease login and change it for security.\n\nRegards,\nEduAttend`;
+        
+        await notifyRecipients({
+          instituteId: req.params.id,
+          type: 'credentials',
+          subject: 'EduAttend Password Reset',
+          message: resetMessage,
+          recipients: [{
+            student_id: null,
+            parent_phone: rows[0].phone.trim()
+          }]
+        });
+      } catch (err) {
+        console.error('Failed to send reset message:', err.message);
+      }
+    }
+
+    res.json({ success: true, message: 'Password reset successfully and notification sent.', newPassword: plainPassword });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

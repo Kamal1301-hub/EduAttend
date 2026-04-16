@@ -62,6 +62,7 @@ export const studentsAPI = {
   update: (id, data) => API.put(`/students/${id}`, data),
   delete: (id) => API.delete(`/students/${id}`),
   resetPassword: (id) => API.patch(`/students/${id}/reset-password`),
+  promote: (data) => API.post(`/students/promote`, data),
   resendCredentials: (id) => API.post(`/students/${id}/resend-credentials`),
   changePassword: (data) => API.post('/students/change-password', data),
 };
@@ -79,6 +80,7 @@ export const messagesAPI = {
   getAll: () => API.get('/messages'),
   send: (data) => API.post('/messages/send', data),
   sendCredentials: (studentId) => API.post(`/messages/send-credentials/${studentId}`),
+  sendIndividual: (studentId, data) => API.post(`/messages/send-individual/${studentId}`, data),
 };
 
 export default API;

@@ -296,4 +296,21 @@ router.post('/change-password', studentSelf, async (req, res) => {
   } catch(err) { res.status(500).json({ success:false, message:err.message }); }
 });
 
+// ── BULK PROMOTE STUDENTS ──────────────────────────────────────
+router.post('/promote', instituteOnly, async (req, res) => {
+  try {
+    const { studentIds, targetClass, targetBatchId } = req.body;
+    if (!studentIds?.length || !targetClass)
+      return res.status(400).json({ success:false, message:'studentIds and targetClass are required' });
+
+    await db.query(
+      `UPDATE students SET class = ?, batch_id = ?, updated_at = NOW()
+       WHERE id IN (?) AND institute_id = ?`,
+      [targetClass, targetBatchId || null, studentIds, req.user.id]
+    );
+
+    res.json({ success:true, message:`Successfully promoted ${studentIds.length} students to Class ${targetClass}` });
+  } catch(err) { res.status(500).json({ success:false, message:err.message }); }
+});
+
 module.exports = router;

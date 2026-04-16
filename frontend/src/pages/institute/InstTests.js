@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { testsAPI, batchesAPI } from '../../api';
+import { useAuth } from '../../context/AuthContext';
 
 // ─── HELPERS ──────────────────────────────────────────────────
 function gradeColor(g) {
@@ -92,10 +95,12 @@ function Modal({ title, subtitle, onClose, children, footer, size=560 }) {
 }
 
 // ─── BLANK FORM ───────────────────────────────────────────────
-const BF = { title:'', subject:'', testDate:'', totalMarks:'100', batchId:'', description:'' };
+const BF = { title:'', subject:'', testDate:'', totalMarks:'100', batchId:'', description:'', isCombined:false, components:[] };
+const BC = { subject: '', total: 100 };
 
 // ═════════════════════════════════════════════════════════════
 export default function InstTests() {
+  const { user } = useAuth();
   const [tests, setTests]         = useState([]);
   const [batches, setBatches]     = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -114,6 +119,7 @@ export default function InstTests() {
 
   // marks entry state (studentId -> marksScored)
   const [marks, setMarks]         = useState({});
+  const [compScores, setCompScores] = useState({});
   const [remarks, setRemarks]     = useState({});
   const [savingMarks, setSavingM] = useState(false);
 
@@ -137,9 +143,10 @@ export default function InstTests() {
   const validate = () => {
     const e = {};
     if (!form.title.trim())   e.title   = 'Test title is required';
-    if (!form.subject.trim()) e.subject = 'Subject is required';
+    if (!form.isCombined && !form.subject.trim()) e.subject = 'Subject is required';
+    if (form.isCombined && form.components.length === 0) e.components = 'At least one subject is required';
     if (!form.testDate)       e.testDate = 'Test date is required';
-    if (!form.totalMarks || isNaN(form.totalMarks) || +form.totalMarks <= 0)
+    if (!form.isCombined && (!form.totalMarks || isNaN(form.totalMarks) || +form.totalMarks <= 0))
       e.totalMarks = 'Enter valid total marks';
     setErrs(e);
     return !Object.keys(e).length;
@@ -150,7 +157,12 @@ export default function InstTests() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await testsAPI.create({ ...form, totalMarks: Number(form.totalMarks), batchId: form.batchId || null });
+      const payload = { ...form, totalMarks: Number(form.totalMarks), batchId: form.batchId || null };
+      if (form.isCombined) {
+        payload.totalMarks = form.components.reduce((a, c) => a + Number(c.total), 0);
+        payload.components = JSON.stringify(form.components);
+      }
+      await testsAPI.create(payload);
       setAddOpen(false);
       setForm(BF); setErrs({});
       await load();
@@ -161,7 +173,16 @@ export default function InstTests() {
 
   // ── EDIT TEST ─────────────────────────────────────────────
   const openEdit = t => {
-    setForm({ title:t.title, subject:t.subject, testDate:t.test_date, totalMarks:String(t.total_marks), batchId:t.batch_id?String(t.batch_id):'', description:t.description||'' });
+    setForm({ 
+      title:t.title, 
+      subject:t.subject, 
+      testDate:t.test_date, 
+      totalMarks:String(t.total_marks), 
+      batchId:t.batch_id?String(t.batch_id):'', 
+      description:t.description||'',
+      isCombined: !!t.is_combined,
+      components: t.components ? (typeof t.components === 'string' ? JSON.parse(t.components) : t.components) : []
+    });
     setErrs({}); setEditData(t);
   };
   const handleEdit = async () => {
@@ -187,13 +208,16 @@ export default function InstTests() {
     try {
       const r = await testsAPI.getOne(test.id);
       const data = r.data.data;
+      if (data.components && typeof data.components === 'string') data.components = JSON.parse(data.components);
+      
       // Pre-fill existing marks
-      const m = {}, rm = {};
+      const m = {}, rm = {}, cs = {};
       data.students.forEach(s => {
         m[s.student_id]  = s.marks_scored !== null && s.marks_scored !== undefined ? String(s.marks_scored) : '';
         rm[s.student_id] = s.remarks || '';
+        cs[s.student_id] = s.component_scores ? (typeof s.component_scores === 'string' ? JSON.parse(s.component_scores) : s.component_scores) : {};
       });
-      setMarks(m); setRemarks(rm);
+      setMarks(m); setRemarks(rm); setCompScores(cs);
       setRTest(data);
     } catch { toast.error('Failed to load test data'); }
   };
@@ -212,14 +236,106 @@ export default function InstTests() {
     try {
       const results = resultTest.students.map(s => ({
         studentId:   s.student_id,
-        marksScored: marks[s.student_id] !== '' ? marks[s.student_id] : null,
+        marksScored: resultTest.is_combined ? Object.values(compScores[s.student_id] || {}).reduce((a,sc)=>a+(parseFloat(sc)||0), 0) : (marks[s.student_id] !== '' ? marks[s.student_id] : null),
         remarks:     remarks[s.student_id] || '',
+        componentScores: resultTest.is_combined ? JSON.stringify(compScores[s.student_id] || {}) : null
       }));
       await testsAPI.saveResults(resultTest.id, { results });
       toast.success('Marks saved successfully!');
       setRTest(null); await load();
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to save marks'); }
     finally { setSavingM(false); }
+  };
+
+  // ── PDF GENERATION ────────────────────────────────────────
+  const downloadPDF = (test) => {
+    const doc = new jsPDF();
+    const instName = user?.name || 'EduAttend Institute';
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(15, 32, 64); // Navy
+    doc.text(instName, 105, 20, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text('TEST RESULT SHEET', 105, 28, { align: 'center' });
+    
+    doc.setDrawColor(226, 232, 240);
+    doc.line(20, 35, 190, 35);
+
+    // Test Details Info Box
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Test: ${test.title}`, 20, 48);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105); // Slate 600
+    doc.text(`Subject: ${test.is_combined ? 'Combined' : (test.subject || '—')}`, 20, 56);
+    doc.text(`Batch: ${test.batch_name || 'All Batches'}`, 20, 62);
+    
+    const fmtDate = new Date(test.test_date).toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
+    doc.text(`Date: ${fmtDate}`, 190, 48, { align: 'right' });
+    doc.text(`Total Marks: ${parseFloat(test.total_marks).toFixed(2)}`, 190, 56, { align: 'right' });
+
+    // Table
+    let tableHead = ['#', 'Student Name', 'Class'];
+    let columnStyles = { 0: { cellWidth: 10 } };
+    
+    if (test.is_combined && test.components) {
+      const subjects = test.components.map(c => c.subject);
+      tableHead = [...tableHead, ...subjects, 'Total', 'Grade'];
+      // Adjust column styles for many subjects
+      subjects.forEach((_, i) => { columnStyles[i + 3] = { halign: 'center' }; });
+      columnStyles[subjects.length + 3] = { fontStyle: 'bold', halign: 'center' };
+      columnStyles[subjects.length + 4] = { fontStyle: 'bold', halign: 'center' };
+    } else {
+      tableHead = [...tableHead, 'Marks', 'Percentage', 'Grade'];
+      columnStyles[3] = { halign: 'center' };
+      columnStyles[4] = { fontStyle: 'bold', halign: 'center' };
+      columnStyles[5] = { fontStyle: 'bold', halign: 'center' };
+    }
+
+    const tableData = test.students.map((s, i) => {
+      const hasResult = s.marks_scored !== null && s.marks_scored !== undefined;
+      let row = [i + 1, s.name, `Class ${s.class}`];
+      
+      if (test.is_combined && test.components) {
+        const scores = s.component_scores ? (typeof s.component_scores === 'string' ? JSON.parse(s.component_scores) : s.component_scores) : {};
+        test.components.forEach(c => {
+          row.push(scores[c.subject] !== undefined ? scores[c.subject] : '—');
+        });
+        row.push(hasResult ? `${s.marks_scored} / ${test.total_marks}` : '—');
+        row.push(s.grade || '—');
+      } else {
+        const pct = hasResult ? Math.round((parseFloat(s.marks_scored) / parseFloat(test.total_marks)) * 100) : 0;
+        row.push(hasResult ? `${s.marks_scored} / ${test.total_marks}` : '—');
+        row.push(hasResult ? pct + '%' : '—');
+        row.push(s.grade || '—');
+      }
+      return row;
+    });
+
+    autoTable(doc, {
+      startY: 65,
+      head: [tableHead],
+      body: tableData,
+      headStyles: { fillColor: [15, 32, 64], textColor: 255, fontSize: 9, halign: 'left' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      styles: { fontSize: 8, cellPadding: 4 },
+      columnStyles: columnStyles
+    });
+
+    // Footer
+    const finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Generated on ${new Date().toLocaleString()} by EduAttend System`, 105, finalY + 15, { align: 'center' });
+
+    doc.save(`${test.title}_Results.pdf`);
+    toast.success('Result sheet downloaded!');
   };
 
   // ── STAT helpers ──────────────────────────────────────────
@@ -297,8 +413,8 @@ export default function InstTests() {
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:4 }}>
                         <div style={{ fontSize:15,fontWeight:700,color:'#0f172a' }}>{test.title}</div>
-                        <span style={{ display:'inline-flex',padding:'2px 9px',background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:20,fontSize:11,fontWeight:600,color:'#1d4ed8' }}>
-                          {test.subject}
+                        <span style={{ display:'inline-flex',padding:'2px 9px',background:test.is_combined?'#f5f3ff':'#eff6ff',border:`1px solid ${test.is_combined?'#ddd6fe':'#bfdbfe'}`,borderRadius:20,fontSize:11,fontWeight:600,color:test.is_combined?'#7c3aed':'#1d4ed8' }}>
+                          {test.is_combined ? 'Combined Test' : test.subject}
                         </span>
                         {test.batch_name && (
                           <span style={{ display:'inline-flex',padding:'2px 9px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e' }}>
@@ -349,18 +465,56 @@ export default function InstTests() {
             </Btn>
           </>}
         >
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }}>
-            <Field label="Test Title" required error={errs.title} children={<Input value={form.title} onChange={f('title')} placeholder="e.g. Unit Test 1" />} />
-            <Field label="Subject" required error={errs.subject} children={<Input value={form.subject} onChange={f('subject')} placeholder="e.g. Mathematics" />} />
+          <div style={{ marginBottom: 15 }}>
+            <Field label="Test Title" required error={errs.title} children={<Input value={form.title} onChange={f('title')} placeholder="Title" />} />
+            <div style={{ marginTop: -5 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--text2)' }}>
+                <input type="checkbox" checked={form.isCombined} onChange={e => setForm(p => ({ ...p, isCombined: e.target.checked }))} />
+                Combine Multiple Subjects?
+              </label>
+            </div>
           </div>
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12 }}>
-            <Field label="Test Date" required error={errs.testDate}
-              children={<Input type="date" value={form.testDate} onChange={f('testDate')} max={new Date().toISOString().split('T')[0]} />} />
-            <Field label="Total Marks" required error={errs.totalMarks}
-              children={<Input type="number" value={form.totalMarks} onChange={f('totalMarks')} min="1" max="1000" placeholder="100" />} />
+
+          {!form.isCombined ? (
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12 }}>
+              <Field label="Subject" required error={errs.subject} children={<Input value={form.subject} onChange={f('subject')} placeholder="e.g. Mathematics" />} />
+              <Field label="Total Marks" required error={errs.totalMarks}
+                children={<Input type="number" value={form.totalMarks} onChange={f('totalMarks')} min="1" max="1000" placeholder="100" />} />
+              <Field label="Test Date" required error={errs.testDate}
+                children={<Input type="date" value={form.testDate} onChange={f('testDate')} max={new Date().toISOString().split('T')[0]} />} />
+            </div>
+          ) : (
+            <div style={{ marginBottom: 20 }}>
+              <div className="section-label" style={{ marginBottom: 10 }}>Subject Components</div>
+              <div style={{ background: '#f8fafc', padding: 15, borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                {form.components.map((c, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 40px', gap: 10, marginBottom: 8 }}>
+                    <Input value={c.subject} placeholder="Physics" onChange={e => {
+                      const nc = [...form.components]; nc[i].subject = e.target.value; setForm(p => ({ ...p, components: nc }));
+                    }} />
+                    <Input type="number" value={c.total} placeholder="100" onChange={e => {
+                      const nc = [...form.components]; nc[i].total = e.target.value; setForm(p => ({ ...p, components: nc }));
+                    }} />
+                    <button className="btn btn-sm btn-red" onClick={() => {
+                      const nc = form.components.filter((_, idx) => idx !== i); setForm(p => ({ ...p, components: nc }));
+                    }}>×</button>
+                  </div>
+                ))}
+                <Btn size="sm" variant="ghost" onClick={() => setForm(p => ({ ...p, components: [...p.components, { ...BC }] }))}>+ Add Subject</Btn>
+                {errs.components && <div style={{ fontSize: 11, color: '#dc2626', marginTop: 5 }}>{errs.components}</div>}
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <Field label="Test Date" required error={errs.testDate}
+                  children={<Input type="date" value={form.testDate} onChange={f('testDate')} max={new Date().toISOString().split('T')[0]} />} />
+              </div>
+            </div>
+          )}
+
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }}>
             <Field label="Batch (optional)"
               children={<Sel value={form.batchId} onChange={f('batchId')}><option value="">All Batches</option>{batches.map(b=><option key={b.id} value={String(b.id)}>{b.name}</option>)}</Sel>} />
           </div>
+          
           <Field label="Description / Notes (optional)"
             children={<Textarea value={form.description} onChange={f('description')} placeholder="Any instructions, syllabus covered, etc." />} />
         </Modal>
@@ -401,8 +555,10 @@ export default function InstTests() {
                 <tbody>
                   {resultTest.students.map((s, idx) => {
                     const m   = marks[s.student_id];
-                    const mNum = parseFloat(m);
-                    const valid = m !== '' && m !== undefined && !isNaN(mNum) && mNum >= 0 && mNum <= parseFloat(resultTest.total_marks);
+                    const mNum = resultTest.is_combined 
+                      ? Object.values(compScores[s.student_id] || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0)
+                      : parseFloat(m);
+                    const valid = !isNaN(mNum) && mNum >= 0 && mNum <= parseFloat(resultTest.total_marks) && (resultTest.is_combined || (m !== '' && m !== undefined));
                     const pct  = valid ? Math.round((mNum / parseFloat(resultTest.total_marks)) * 100) : null;
                     const g    = valid ? (['A+','A','B+','B','C','D','F'][pct>=90?0:pct>=80?1:pct>=70?2:pct>=60?3:pct>=50?4:pct>=35?5:6]) : null;
                     return (
@@ -410,22 +566,47 @@ export default function InstTests() {
                         <td style={{ padding:'10px 13px',color:'#94a3b8',fontWeight:600 }}>{idx+1}</td>
                         <td style={{ padding:'10px 13px' }}>
                           <div style={{ fontWeight:600,color:'#0f172a' }}>{s.name}</div>
-                          {s.aadhar && <div style={{ fontSize:11,color:'#94a3b8' }}>{s.aadhar}</div>}
+                          <div style={{ fontSize:10,color:'#94a3b8' }}>{s.aadhar || 'No Aadhar'}</div>
                         </td>
                         <td style={{ padding:'10px 13px' }}>
                           <span style={{ padding:'2px 8px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e' }}>Class {s.class}</span>
                         </td>
                         <td style={{ padding:'10px 13px' }}>
-                          <input
-                            type="number" min="0" max={resultTest.total_marks} step="0.5"
-                            value={marks[s.student_id] ?? ''}
-                            onChange={e => setMarks(p => ({ ...p, [s.student_id]: e.target.value }))}
-                            placeholder={`/ ${resultTest.total_marks}`}
-                            style={{ width:90,padding:'7px 10px',background:'#f8fafc',border:`1.5px solid ${valid?'#16a34a':m&&!valid?'#dc2626':'#e2e8f0'}`,borderRadius:8,fontSize:13,color:'#0f172a',fontFamily:'inherit',outline:'none',fontWeight:600,transition:'all 0.2s' }}
-                            onFocus={e=>{ e.target.style.borderColor='#2563eb'; e.target.style.background='#fff'; e.target.style.boxShadow='0 0 0 3px rgba(37,99,235,0.1)'; }}
-                            onBlur={e=>{ e.target.style.boxShadow='none'; e.target.style.borderColor=valid?'#16a34a':m&&!valid?'#dc2626':'#e2e8f0'; e.target.style.background='#f8fafc'; }}
-                          />
-                          {m&&!valid&&<div style={{ fontSize:11,color:'#dc2626',marginTop:3 }}>Max: {resultTest.total_marks}</div>}
+                          {!resultTest.is_combined ? (
+                            <input
+                              type="number" min="0" max={resultTest.total_marks} step="0.5"
+                              value={marks[s.student_id] ?? ''}
+                              onChange={e => setMarks(p => ({ ...p, [s.student_id]: e.target.value }))}
+                              placeholder={`/ ${resultTest.total_marks}`}
+                              style={{ width:90,padding:'7px 10px',background:'#f8fafc',border:`1.5px solid ${valid?'#16a34a':m&&!valid?'#dc2626':'#e2e8f0'}`,borderRadius:8,fontSize:13,color:'#0f172a',fontFamily:'inherit',outline:'none',fontWeight:600,transition:'all 0.2s' }}
+                            />
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 200 }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                                {resultTest.components.map((c, ci) => (
+                                  <div key={ci}>
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 2 }}>{c.subject}</div>
+                                    <input
+                                      type="number" min="0" max={c.total} step="0.5"
+                                      value={compScores[s.student_id]?.[c.subject] ?? ''}
+                                      placeholder={`0 / ${c.total}`}
+                                      onChange={e => {
+                                        const ncs = { ...compScores };
+                                        if (!ncs[s.student_id]) ncs[s.student_id] = {};
+                                        ncs[s.student_id][c.subject] = e.target.value;
+                                        setCompScores(ncs);
+                                      }}
+                                      style={{ width: '100%', padding: '6px 9px', background: '#fff', border: '1px solid var(--border)', borderRadius: 7, fontSize: 13, fontWeight: 600, outline: 'none' }}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              <div style={{ background: 'var(--blue-bg)', padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, color: 'var(--blue-text)', alignSelf: 'flex-start' }}>
+                                Sum: {mNum} / {resultTest.total_marks}
+                              </div>
+                            </div>
+                          )}
+                          {m && !valid && !resultTest.is_combined && <div style={{ fontSize:11,color:'#dc2626',marginTop:3 }}>Max: {resultTest.total_marks}</div>}
                         </td>
                         <td style={{ padding:'10px 13px' }}>
                           {g ? (
@@ -459,9 +640,18 @@ export default function InstTests() {
         <Modal
           title={`Results — ${viewTest.title}`}
           subtitle={`📅 ${viewTest.test_date}  ·  📚 ${viewTest.subject}  ·  🎯 Total: ${viewTest.total_marks}  ·  ${viewTest.batch_name||'All Batches'}`}
-          onClose={()=>setViewTest(null)}
           size={680}
-          footer={<><Btn onClick={()=>setViewTest(null)}>Close</Btn><Btn variant="primary" onClick={()=>{ setViewTest(null); openMarkEntry(viewTest); }}>✏️ Edit Marks</Btn></>}
+          footer={
+            <>
+              <div style={{ flex: 1, display: 'flex', gap: 10 }}>
+                <Btn variant="navy" onClick={() => downloadPDF(viewTest)}>
+                  📄 Download PDF Result Sheet
+                </Btn>
+              </div>
+              <Btn onClick={() => setViewTest(null)}>Close</Btn>
+              <Btn variant="primary" onClick={() => { setViewTest(null); openMarkEntry(viewTest); }}>✏️ Edit Marks</Btn>
+            </>
+          }
         >
           {/* Summary */}
           {viewTest.students.filter(s=>s.marks_scored!==null&&s.marks_scored!==undefined).length > 0 && (() => {

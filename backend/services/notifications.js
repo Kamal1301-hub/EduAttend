@@ -56,7 +56,13 @@ async function trySendWhatsApp(client, toPhone, body) {
     });
     return { ok: true, channel: 'whatsapp', sid: msg.sid };
   } catch (err) {
-    return { ok: false, error: err.message || 'WhatsApp send failed' };
+    let errorMsg = err.message || 'WhatsApp send failed';
+    if (err.code === 21608) {
+      errorMsg = 'Recipient hasn\'t joined WhatsApp Sandbox or number not verified (Trial Account)';
+    } else if (err.code === 63003) {
+      errorMsg = 'WhatsApp channel not yet activated or Sandbox session expired';
+    }
+    return { ok: false, error: errorMsg, code: err.code };
   }
 }
 
@@ -70,7 +76,13 @@ async function trySendSMS(client, toPhone, body) {
     const msg = await client.messages.create({ from, to: toPhone, body });
     return { ok: true, channel: 'sms', sid: msg.sid };
   } catch (err) {
-    return { ok: false, error: err.message || 'SMS send failed' };
+    let errorMsg = err.message || 'SMS send failed';
+    if (err.code === 21608) {
+      errorMsg = 'Recipient number is not verified in Twilio (Trial Account)';
+    } else if (err.code === 21211) {
+      errorMsg = 'Invalid phone number format';
+    }
+    return { ok: false, error: errorMsg, code: err.code };
   }
 }
 

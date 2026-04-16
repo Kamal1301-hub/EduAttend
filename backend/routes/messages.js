@@ -44,16 +44,19 @@ router.get('/', instituteOnly, async (req, res) => {
 // POST /api/messages/send  — general announcement to parents
 router.post('/send', instituteOnly, async (req, res) => {
   try {
-    const { type, subject, message, batchId } = req.body;
+    const { type, subject, message, batchId, studentIds } = req.body;
     if (!type || !subject || !message)
       return res.status(400).json({ success:false, message:'Type, subject and message are required' });
     if (!['test', 'ptm', 'holiday', 'custom'].includes(type))
       return res.status(400).json({ success:false, message:'Invalid message type' });
 
     const phoneParams  = [req.user.id];
-    let phoneQuery     = 'SELECT id AS student_id, parent_name, parent_phone, parent_email, name FROM students WHERE institute_id = ?';
+    let phoneQuery     = 'SELECT id AS student_id, name, parent_phone, parent_name, parent_email FROM students WHERE institute_id = ?';
 
-    if (batchId) {
+    if (studentIds && Array.isArray(studentIds) && studentIds.length > 0) {
+      phoneQuery += ` AND id IN (${studentIds.map(() => '?').join(',')})`;
+      phoneParams.push(...studentIds);
+    } else if (batchId) {
       phoneQuery += ' AND batch_id = ?';
       phoneParams.push(batchId);
     }
@@ -66,6 +69,7 @@ router.post('/send', instituteOnly, async (req, res) => {
       message,
       batchId: batchId || null,
       recipients,
+      buildMessage: (student) => message.replace(/{name}/g, student.name || 'your ward')
     });
 
     res.json({
@@ -111,6 +115,47 @@ router.post('/send-credentials/:studentId', instituteOnly, async (req, res) => {
     res.json({
       success: true,
       message: `Credentials notification attempted for ${s.parent_name} (${s.parent_phone})`,
+      data: {
+        id: notifyResult.messageLogId,
+        sent: notifyResult.sentCount,
+        failed: notifyResult.failedCount,
+      },
+    });
+  } catch(err) { res.status(500).json({ success:false, message:err.message }); }
+});
+
+// POST /api/messages/send-individual/:studentId
+router.post('/send-individual/:studentId', instituteOnly, async (req, res) => {
+  try {
+    const { type, subject, message } = req.body;
+    if (!type || !subject || !message)
+      return res.status(400).json({ success:false, message:'Type, subject and message are required' });
+
+    const [rows] = await db.query(
+      'SELECT id, name, parent_phone, parent_name, batch_id FROM students WHERE id=? AND institute_id=?',
+      [req.params.studentId, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ success:false, message:'Student not found' });
+    const s = rows[0];
+
+    const notifyResult = await notifyRecipients({
+      instituteId: req.user.id,
+      type,
+      subject,
+      message,
+      batchId: s.batch_id || null,
+      recipients: [{
+        student_id: s.id,
+        name: s.name,
+        parent_phone: s.parent_phone,
+        parent_name: s.parent_name
+      }],
+      buildMessage: (student) => message.replace(/{name}/g, student.name || 'your ward')
+    });
+
+    res.json({
+      success: true,
+      message: `Message sent to ${s.parent_name}`,
       data: {
         id: notifyResult.messageLogId,
         sent: notifyResult.sentCount,

@@ -17,11 +17,18 @@ export default function InstMessages() {
   const [msgTime, setMsgTime] = useState('');
   const [msgSub, setMsgSub] = useState('');
   const [msgCustom, setMsgCustom] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
   const { user } = useAuth();
 
   useEffect(() => {
     Promise.all([messagesAPI.getAll(), batchesAPI.getAll(), studentsAPI.getAll()])
-      .then(([m, b, s]) => { setLogs(m.data.data); setBatches(b.data.data); setStudents(s.data.data); })
+      .then(([m, b, s]) => { 
+        setLogs(m.data.data); 
+        setBatches(b.data.data); 
+        setStudents(s.data.data);
+        // Initially select all students
+        setSelectedIds(s.data.data.map(stu => stu.id));
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -32,27 +39,39 @@ export default function InstMessages() {
     { id: 'custom', icon: '📢', label: 'Custom Message', sub: 'Send any custom announcement' },
   ];
 
-  const recipients = msgBatch ? students.filter(s => String(s.batch_id) === msgBatch) : students;
+  const filteredRecipients = msgBatch ? students.filter(s => String(s.batch_id) === msgBatch) : students;
   const instName = user?.name || 'Institute';
 
-  const getPreview = () => {
+  // Update selected IDs when batch changes
+  const handleBatchChange = (id) => {
+    setMsgBatch(id);
+    const newFiltered = id ? students.filter(s => String(s.batch_id) === id) : students;
+    setSelectedIds(newFiltered.map(s => s.id));
+  };
+
+  const toggleStudent = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const getPreview = (studentName = '{name}') => {
     const d = msgDate || '[Date]', t = msgTime || '[Time]', s = msgSub || (msgType === 'test' ? 'Unit Test' : msgType === 'holiday' ? '[Holiday]' : '');
     const templates = {
-      test: `Dear Parent,\n\nThis is to inform you that a *${s}* is scheduled on *${d}* at *${t}*.\n\nKindly ensure your ward is well prepared.\n\nRegards,\n${instName}`,
-      ptm: `Dear Parent,\n\nYou are invited to attend the *Parent-Teacher Meeting (PTM)* on *${d}* at *${t}*.\n\nVenue: ${instName}\n\nYour presence is important.\n\nRegards,\n${instName}`,
-      holiday: `Dear Parent,\n\nPlease note the institute will remain *closed on ${d}* on account of *${s}*.\n\nClasses will resume as normal thereafter.\n\nRegards,\n${instName}`,
-      custom: msgCustom || 'Type your message below...',
+      test: `Dear Parent,\n\nThis is to inform you that a *${s}* is scheduled for your ward *${studentName}* on *${d}* at *${t}*.\n\nKindly ensure they are well prepared.\n\nRegards,\n${instName}`,
+      ptm: `Dear Parent,\n\nYou are invited to attend the *Parent-Teacher Meeting (PTM)* regarding *${studentName}* on *${d}* at *${t}*.\n\nVenue: ${instName}\n\nYour presence is important.\n\nRegards,\n${instName}`,
+      holiday: `Dear Parent,\n\nPlease note the institute will remain *closed on ${d}* for *${studentName}* and all students on account of *${s}*.\n\nClasses will resume as normal thereafter.\n\nRegards,\n${instName}`,
+      custom: msgCustom ? msgCustom.replace(/{name}/g, studentName) : 'Type your message below...',
     };
     return templates[msgType];
   };
 
   const handleSend = async () => {
-    if (recipients.length === 0) { toast.error('No students to send to'); return; }
+    if (selectedIds.length === 0) { toast.error('No students selected'); return; }
+    const finalRecipients = students.filter(s => selectedIds.includes(s.id));
     const subject = msgSub || msgCustom || TYPES.find(t => t.id === msgType)?.label;
     if (!subject) { toast.error('Please fill in the message details'); return; }
     setSending(true);
     try {
-      const r = await messagesAPI.send({ type: msgType, subject, message: getPreview(), batchId: msgBatch || null });
+      const r = await messagesAPI.send({ type: msgType, subject, message: getPreview('{name}'), batchId: msgBatch || null, studentIds: selectedIds });
       const sent = r.data?.data?.sent ?? 0;
       const failed = r.data?.data?.failed ?? 0;
       if (failed > 0) toast.success(`Notification attempted: ${sent} sent, ${failed} failed`);
@@ -91,11 +110,9 @@ export default function InstMessages() {
             <div className="panel">
               <div className="panel-head"><span className="panel-title">Message Details</span></div>
               <div style={{ padding: 15 }}>
-                <div className="form-group"><label>Send To (Batch)</label>
-                  <select className="form-control" value={msgBatch} onChange={e => setMsgBatch(e.target.value)}>
-                    <option value="">All Students (All Batches)</option>
-                    {batches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
-                  </select>
+                <div className="form-group">
+                  <label>Subject / Topic</label>
+                  <input className="form-control" placeholder="e.g. Data Analytics Quiz" value={msgSub} onChange={e => setMsgSub(e.target.value)} />
                 </div>
                 {msgType !== 'custom' ? (
                   <>
@@ -122,34 +139,57 @@ export default function InstMessages() {
             <div className="panel" style={{ marginBottom: 14 }}>
               <div className="panel-head">
                 <span className="panel-title">Preview</span>
-                <span className="badge bb">{recipients.length} recipients</span>
+                <span className="badge bb">{filteredRecipients.length} recipients</span>
               </div>
               <div style={{ padding: 15 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <span style={{ fontSize: 18 }}>{TYPES.find(t => t.id === msgType)?.icon}</span>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{TYPES.find(t => t.id === msgType)?.label}</span>
                 </div>
-                <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '13px 15px', fontSize: 12, color: 'var(--text)', lineHeight: 1.7, whiteSpace: 'pre-wrap', minHeight: 100 }}>
-                  {getPreview()}
+                <div style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)', borderRadius: 8, padding: '13px 15px', fontSize: 12, color: 'var(--text)', lineHeight: 1.7, whiteSpace: 'pre-wrap', minHeight: 100 }}>
+                  {getPreview(selectedIds.length > 0 ? students.find(s => s.id === selectedIds[0])?.name : '{name}')}
                 </div>
+                {selectedIds.length > 0 && (
+                  <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 8, fontStyle: 'italic' }}>
+                    * Personalized for <b>{selectedIds.length}</b> selected students.
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="panel" style={{ marginBottom: 14 }}>
-              <div className="panel-head"><span className="panel-title">Recipients</span><span style={{ fontSize: 12, color: 'var(--text3)' }}>{recipients.length} parents</span></div>
-              <div style={{ maxHeight: 160, overflowY: 'auto' }}>
-                {recipients.length === 0 ? <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>No students</div> :
-                  recipients.map(s => (
-                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
-                      <div><div style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</div><div style={{ fontSize: 11, color: 'var(--text3)' }}>{s.parent_name}</div></div>
-                      <div style={{ fontSize: 12, color: 'var(--text2)' }}>{s.parent_phone}</div>
+              <div className="panel-head">
+                <span className="panel-title">Choose Recipients</span>
+                <span className="badge bb">{selectedIds.length} selected</span>
+              </div>
+              <div style={{ padding: '0 15px 12px' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Filter by Batch</label>
+                <select className="form-control" style={{ fontSize: 12, height: 36 }} value={msgBatch} onChange={e => handleBatchChange(e.target.value)}>
+                  <option value="">All Students (All Batches)</option>
+                  {batches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+                </select>
+              </div>
+              <div style={{ maxHeight: 220, overflowY: 'auto', borderTop: '1px solid var(--border)' }}>
+                {filteredRecipients.length === 0 ? <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>No students in this batch</div> :
+                  filteredRecipients.map(s => (
+                    <div key={s.id} onClick={() => toggleStudent(s.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: selectedIds.includes(s.id) ? 'var(--bg)' : 'transparent', transition: 'background 0.2s' }}>
+                      <input type="checkbox" checked={selectedIds.includes(s.id)} onChange={() => {}} style={{ cursor: 'pointer' }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: selectedIds.includes(s.id) ? 'var(--blue-text)' : 'var(--text)' }}>{s.name}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>{s.parent_name} • {s.batch_name || 'No Batch'}</div>
+                      </div>
                     </div>
                   ))}
               </div>
             </div>
 
-            <button className="btn btn-navy btn-w" style={{ padding: 11, fontSize: 13 }} onClick={handleSend} disabled={sending}>
-              {sending ? 'Sending…' : `📤 Send to ${recipients.length} Parent${recipients.length !== 1 ? 's' : ''}`}
+            <button className="btn btn-navy btn-w" style={{ padding: 11, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={handleSend} disabled={sending}>
+              {sending ? 'Sending…' : (
+                <>
+                  <span>📤 Send Message to {selectedIds.length} Parents</span>
+                </>
+              )}
             </button>
           </div>
         </div>
