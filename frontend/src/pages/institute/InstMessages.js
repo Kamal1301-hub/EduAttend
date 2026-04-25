@@ -18,6 +18,7 @@ export default function InstMessages() {
   const [msgSub, setMsgSub] = useState('');
   const [msgCustom, setMsgCustom] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
+  const [primaryChannel, setPrimaryChannel] = useState('whatsapp');
   const { user } = useAuth();
 
   useEffect(() => {
@@ -66,12 +67,18 @@ export default function InstMessages() {
 
   const handleSend = async () => {
     if (selectedIds.length === 0) { toast.error('No students selected'); return; }
-    const finalRecipients = students.filter(s => selectedIds.includes(s.id));
     const subject = msgSub || msgCustom || TYPES.find(t => t.id === msgType)?.label;
     if (!subject) { toast.error('Please fill in the message details'); return; }
     setSending(true);
     try {
-      const r = await messagesAPI.send({ type: msgType, subject, message: getPreview('{name}'), batchId: msgBatch || null, studentIds: selectedIds });
+      const r = await messagesAPI.send({ 
+        type: msgType, 
+        subject, 
+        message: getPreview('{name}'), 
+        batchId: msgBatch || null, 
+        studentIds: selectedIds,
+        primaryChannel: primaryChannel
+      });
       const sent = r.data?.data?.sent ?? 0;
       const failed = r.data?.data?.failed ?? 0;
       if (failed > 0) toast.success(`Notification attempted: ${sent} sent, ${failed} failed`);
@@ -130,6 +137,37 @@ export default function InstMessages() {
                     <textarea className="form-control" rows={5} placeholder="Type your announcement here..." value={msgCustom} onChange={e => setMsgCustom(e.target.value)} style={{ resize: 'vertical', minHeight: 100 }} />
                   </div>
                 )}
+
+                <div className="form-group" style={{ marginTop: 20 }}>
+                  <label style={{ display: 'block', marginBottom: 10, fontWeight: 700 }}>Delivery Channel</label>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button 
+                      onClick={() => setPrimaryChannel('whatsapp')}
+                      style={{ 
+                        flex: 1, padding: '10px', borderRadius: 8, border: `1.5px solid ${primaryChannel === 'whatsapp' ? '#25D366' : 'var(--border)'}`,
+                        background: primaryChannel === 'whatsapp' ? '#e6f9ed' : 'var(--white)', color: primaryChannel === 'whatsapp' ? '#075E54' : 'var(--text)',
+                        fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                      }}
+                    >
+                      <span>💬</span> WhatsApp
+                    </button>
+                    <button 
+                      onClick={() => setPrimaryChannel('sms')}
+                      style={{ 
+                        flex: 1, padding: '10px', borderRadius: 8, border: `1.5px solid ${primaryChannel === 'sms' ? 'var(--blue)' : 'var(--border)'}`,
+                        background: primaryChannel === 'sms' ? 'var(--blue-bg)' : 'var(--white)', color: primaryChannel === 'sms' ? 'var(--blue-text)' : 'var(--text)',
+                        fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                      }}
+                    >
+                      <span>📱</span> SMS Text
+                    </button>
+                  </div>
+                  {primaryChannel === 'whatsapp' && (
+                    <div style={{ marginTop: 10, padding: 10, background: '#fff9db', border: '1px solid #fab005', borderRadius: 6, fontSize: 10, color: '#856404' }}>
+                      <b>Note:</b> For WhatsApp, ensure recipients have joined your Twilio Sandbox (send "join sandbox-name" to your Twilio number).
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -187,7 +225,7 @@ export default function InstMessages() {
             <button className="btn btn-navy btn-w" style={{ padding: 11, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={handleSend} disabled={sending}>
               {sending ? 'Sending…' : (
                 <>
-                  <span>📤 Send Message to {selectedIds.length} Parents</span>
+                  <span>📤 Send via {primaryChannel.toUpperCase()} to {selectedIds.length} Parents</span>
                 </>
               )}
             </button>
@@ -202,20 +240,25 @@ export default function InstMessages() {
               <table>
                 <thead><tr><th>Type</th><th>Subject</th><th>Batch</th><th>Recipients</th><th>Delivery</th><th>Date & Time</th></tr></thead>
                 <tbody>
-                  {logs.map(m => (
-                    <tr key={m.id}>
-                      <td style={{ fontSize: 16 }}>{msgIcons[m.type] || '📩'}</td>
-                      <td style={{ fontWeight: 600 }}>{m.subject}</td>
-                      <td style={{ color: 'var(--text2)' }}>{m.batch_name || 'All Batches'}</td>
-                      <td><span className="badge bb">{m.recipients_count} parents</span></td>
-                      <td style={{ fontSize: 12 }}>
-                        <span style={{ color: 'var(--green-text)', fontWeight: 600 }}>{m.sent_count || 0} sent</span>
-                        <span style={{ color: 'var(--text3)' }}> · </span>
-                        <span style={{ color: (m.failed_count || 0) > 0 ? 'var(--red-text)' : 'var(--text3)', fontWeight: 600 }}>{m.failed_count || 0} failed</span>
-                      </td>
-                      <td style={{ fontSize: 12, color: 'var(--text3)' }}>{new Date(m.sent_at).toLocaleString('en-IN')}</td>
-                    </tr>
-                  ))}
+          {logs.map(m => (
+            <tr key={m.id}>
+              <td style={{ fontSize: 16 }}>{msgIcons[m.type] || '📩'}</td>
+              <td style={{ fontWeight: 600 }}>{m.subject}</td>
+              <td style={{ color: 'var(--text2)' }}>{m.batch_name || 'All Batches'}</td>
+              <td><span className="badge bb">{m.recipients_count} parents</span></td>
+              <td style={{ fontSize: 12 }}>
+                <span style={{ color: 'var(--green-text)', fontWeight: 600 }}>{m.sent_count || 0} sent</span>
+                <span style={{ color: 'var(--text3)' }}> · </span>
+                <span style={{ color: (m.failed_count || 0) > 0 ? 'var(--red-text)' : 'var(--text3)', fontWeight: 600 }}>{m.failed_count || 0} failed</span>
+                {(m.failed_count || 0) > 0 && m.sample_error && (
+                  <div style={{ fontSize: 9, color: 'var(--red-text)', marginTop: 4, fontStyle: 'italic', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.sample_error}>
+                    ⚠️ {m.sample_error}
+                  </div>
+                )}
+              </td>
+              <td style={{ fontSize: 12, color: 'var(--text3)' }}>{new Date(m.sent_at).toLocaleString('en-IN')}</td>
+            </tr>
+          ))}
                 </tbody>
               </table>
             </div>

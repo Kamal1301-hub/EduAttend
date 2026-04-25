@@ -524,7 +524,7 @@ export default function InstTests() {
       {resultTest && (
         <Modal
           title={`Enter Marks — ${resultTest.title}`}
-          subtitle={`📅 ${resultTest.test_date}  ·  📚 ${resultTest.subject}  ·  🎯 Total: ${resultTest.total_marks} marks  ·  ${resultTest.batch_name || 'All Batches'}`}
+          subtitle={`📅 ${new Date(resultTest.test_date).toLocaleDateString('en-US', {day:'numeric',month:'short',year:'numeric'})}  ·  📚 ${resultTest.is_combined ? 'Combined' : (resultTest.subject || '—')}  ·  🎯 Total: ${resultTest.total_marks} marks  ·  ${resultTest.batch_name || 'All Batches'}`}
           onClose={()=>setRTest(null)}
           size={680}
           footer={<>
@@ -543,7 +543,7 @@ export default function InstTests() {
           {resultTest.students.length === 0 ? (
             <div style={{ textAlign:'center',padding:'40px 20px',color:'#94a3b8' }}>No students found in this batch.</div>
           ) : (
-            <div style={{ border:'1px solid #e2e8f0',borderRadius:10,overflow:'hidden' }}>
+            <div style={{ border:'1px solid #e2e8f0',borderRadius:10,overflowX:'auto' }}>
               <table style={{ width:'100%',borderCollapse:'collapse',fontSize:13 }}>
                 <thead>
                   <tr style={{ background:'#f8fafc' }}>
@@ -569,7 +569,7 @@ export default function InstTests() {
                           <div style={{ fontSize:10,color:'#94a3b8' }}>{s.aadhar || 'No Aadhar'}</div>
                         </td>
                         <td style={{ padding:'10px 13px' }}>
-                          <span style={{ padding:'2px 8px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e' }}>Class {s.class}</span>
+                          <span style={{ padding:'2px 8px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e',whiteSpace:'nowrap' }}>Class {s.class}</span>
                         </td>
                         <td style={{ padding:'10px 13px' }}>
                           {!resultTest.is_combined ? (
@@ -639,7 +639,7 @@ export default function InstTests() {
       {viewTest && (
         <Modal
           title={`Results — ${viewTest.title}`}
-          subtitle={`📅 ${viewTest.test_date}  ·  📚 ${viewTest.subject}  ·  🎯 Total: ${viewTest.total_marks}  ·  ${viewTest.batch_name||'All Batches'}`}
+          subtitle={`📅 ${new Date(viewTest.test_date).toLocaleDateString('en-US', {day:'numeric',month:'short',year:'numeric'})}  ·  📚 ${viewTest.is_combined ? 'Combined' : (viewTest.subject || '—')}  ·  🎯 Total: ${viewTest.total_marks}  ·  ${viewTest.batch_name||'All Batches'}`}
           size={680}
           footer={
             <>
@@ -676,8 +676,8 @@ export default function InstTests() {
             );
           })()}
 
-          <div style={{ border:'1px solid #e2e8f0',borderRadius:10,overflow:'hidden' }}>
-            <table style={{ width:'100%',borderCollapse:'collapse',fontSize:13 }}>
+          <div style={{ border:'1px solid #e2e8f0',borderRadius:10,overflowX:'auto' }}>
+            <table style={{ width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:600 }}>
               <thead>
                 <tr style={{ background:'#f8fafc' }}>
                   {['#','Student','Class','Marks','Grade','%','Remarks'].map(h=>(
@@ -694,7 +694,7 @@ export default function InstTests() {
                       <td style={{ padding:'10px 13px',color:'#94a3b8',fontWeight:600 }}>{idx+1}</td>
                       <td style={{ padding:'10px 13px' }}><div style={{ fontWeight:600 }}>{s.name}</div></td>
                       <td style={{ padding:'10px 13px' }}>
-                        <span style={{ padding:'2px 8px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e' }}>Class {s.class}</span>
+                        <span style={{ padding:'2px 8px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e',whiteSpace:'nowrap' }}>Class {s.class}</span>
                       </td>
                       <td style={{ padding:'10px 13px',fontWeight:700,color:hasResult?'#0f172a':'#94a3b8' }}>
                         {hasResult ? `${s.marks_scored} / ${viewTest.total_marks}` : '—'}

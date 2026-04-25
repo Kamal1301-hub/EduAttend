@@ -85,7 +85,7 @@ router.get('/:id', instituteOnly, async (req, res) => {
 // Sends credentials notification via Twilio (WhatsApp with SMS fallback)
 router.post('/', instituteOnly, async (req, res) => {
   try {
-    const { name, aadhar, classLevel, board, stream, batchId, parentName, parentPhone, parentEmail } = req.body;
+    const { name, aadhar, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail } = req.body;
     if (!name || !parentName || !parentPhone || !classLevel)
       return res.status(400).json({ success:false, message:'Name, class, parent name and phone are required' });
 
@@ -94,10 +94,10 @@ router.post('/', instituteOnly, async (req, res) => {
     // 1. Insert base record
     const [result] = await db.query(
       `INSERT INTO students
-         (institute_id,batch_id,name,aadhar,class,board,stream,parent_name,parent_phone,parent_email)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+         (institute_id,batch_id,name,aadhar,class,board,stream,student_phone,parent_name,parent_phone,parent_email)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [req.user.id, batchId||null, name.trim(), aadhar||'', classLevel,
-       board||'CBSE', finalStream, parentName.trim(), parentPhone.trim(), parentEmail||'']
+       board||'CBSE', finalStream, studentPhone?studentPhone.trim():'', parentName.trim(), parentPhone.trim(), parentEmail||'']
     );
     const studentId = result.insertId;
 
@@ -163,16 +163,17 @@ router.put('/:id', instituteOnly, async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ success:false, message:'Student not found' });
     const s = rows[0];
-    const { name, aadhar, classLevel, board, stream, batchId, parentName, parentPhone, parentEmail } = req.body;
+    const { name, aadhar, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail } = req.body;
     const cls = classLevel || s.class;
     const finalStream = (cls==='11'||cls==='12') ? (stream!==undefined?stream:s.stream) : '';
     await db.query(
       `UPDATE students SET name=?,aadhar=?,class=?,board=?,stream=?,batch_id=?,
-       parent_name=?,parent_phone=?,parent_email=?,updated_at=NOW()
+       student_phone=?,parent_name=?,parent_phone=?,parent_email=?,updated_at=NOW()
        WHERE id=? AND institute_id=?`,
       [name!==undefined?name.trim():s.name, aadhar!==undefined?aadhar:s.aadhar,
        cls, board!==undefined?board:s.board, finalStream,
        batchId!==undefined?(batchId||null):s.batch_id,
+       studentPhone!==undefined?studentPhone.trim():s.student_phone,
        parentName!==undefined?parentName.trim():s.parent_name,
        parentPhone!==undefined?parentPhone.trim():s.parent_phone,
        parentEmail!==undefined?parentEmail:s.parent_email,

@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { studentsAPI, batchesAPI, messagesAPI } from '../../api';
 import { Modal, ConfirmModal, Spinner, EmptyState, Avatar, StreamBadge, ClassBadge } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 
-const INIT = { name:'', aadhar:'', classLevel:'8', board:'CBSE', stream:'Board', batchId:'', parentName:'', parentPhone:'', parentEmail:'' };
+const INIT = { name:'', aadhar:'', classLevel:'8', board:'CBSE', stream:'Board', batchId:'', studentPhone:'', parentName:'', parentPhone:'', parentEmail:'' };
 
 // ── Credential Box (same style as institute credentials) ──────
 function CredBox({ loginId, defaultPassword, mustChange }) {
@@ -45,6 +46,7 @@ function CredBox({ loginId, defaultPassword, mustChange }) {
 }
 
 export default function InstStudents() {
+  const location = useLocation();
   const [students, setStudents]   = useState([]);
   const [batches, setBatches]     = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -74,6 +76,21 @@ export default function InstStudents() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (location.state?.openAdd) {
+      setForm({
+        ...INIT,
+        batchId: location.state.batchId || '',
+        classLevel: location.state.classLevel || '8',
+        board: location.state.board || 'CBSE',
+        stream: location.state.stream || 'Board'
+      });
+      setModal({ type: 'add' });
+      // Clear the state so it doesn't re-trigger on reload
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   const filtered = students.filter(s => {
     const q = search.toLowerCase();
     const mQ = !q || s.name.toLowerCase().includes(q) || s.aadhar?.includes(q) || s.parent_name?.toLowerCase().includes(q) || s.parent_phone?.includes(q) || s.student_login_id?.toLowerCase().includes(q);
@@ -86,7 +103,7 @@ export default function InstStudents() {
 
   const openAdd  = () => { setForm(INIT); setModal({ type:'add' }); };
   const openEdit = (s) => {
-    setForm({ name:s.name, aadhar:s.aadhar||'', classLevel:s.class, board:s.board, stream:s.stream||'Board', batchId:s.batch_id||'', parentName:s.parent_name, parentPhone:s.parent_phone, parentEmail:s.parent_email||'' });
+    setForm({ name:s.name, aadhar:s.aadhar||'', classLevel:s.class, board:s.board, stream:s.stream||'Board', batchId:s.batch_id||'', studentPhone:s.student_phone||'', parentName:s.parent_name, parentPhone:s.parent_phone, parentEmail:s.parent_email||'' });
     setModal({ type:'edit', data:s });
   };
   const openView = async (s) => {
@@ -202,11 +219,14 @@ export default function InstStudents() {
           <select className="form-control" value={form.stream} onChange={f('stream')}><option>NEET</option><option>JEE</option><option>Board</option><option>Both</option></select>
         </div>
       )}
-      <div className="form-group"><label>Batch</label>
-        <select className="form-control" value={form.batchId} onChange={f('batchId')}>
-          <option value="">-- No Batch --</option>
-          {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
+      <div className="form-row">
+        <div className="form-group"><label>Batch</label>
+          <select className="form-control" value={form.batchId} onChange={f('batchId')}>
+            <option value="">-- No Batch --</option>
+            {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>Student Phone</label><input className="form-control" placeholder="10-digit number" value={form.studentPhone} onChange={f('studentPhone')} /></div>
       </div>
       <div className="divider" />
       <div className="section-label">Parent / Guardian</div>
@@ -362,6 +382,7 @@ export default function InstStudents() {
           {[
             ['Aadhar',       viewData.aadhar        || '—'],
             ['Batch',        viewData.batch_name     || '—'],
+            ['Student Phone', viewData.student_phone || '—'],
             ['Present Days', viewData.attendance?.present || 0, 'green'],
             ['Absent Days',  viewData.attendance?.absent  || 0, 'red'],
             ['Late Days',    viewData.attendance?.late    || 0, 'amber'],

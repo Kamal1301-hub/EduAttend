@@ -12,13 +12,15 @@ router.get('/', instituteOnly, async (req, res) => {
       [rows] = await db.query(
         `SELECT ml.*, b.name AS batch_name,
                 COALESCE(md.sent_count, 0) AS sent_count,
-                COALESCE(md.failed_count, 0) AS failed_count
+                COALESCE(md.failed_count, 0) AS failed_count,
+                md.sample_error
          FROM message_logs ml
          LEFT JOIN batches b ON b.id = ml.batch_id
          LEFT JOIN (
            SELECT message_log_id,
                   SUM(status = 'sent') AS sent_count,
-                  SUM(status = 'failed') AS failed_count
+                  SUM(status = 'failed') AS failed_count,
+                  MAX(error_message) AS sample_error
            FROM message_deliveries
            GROUP BY message_log_id
          ) md ON md.message_log_id = ml.id
@@ -29,7 +31,7 @@ router.get('/', instituteOnly, async (req, res) => {
     } catch (err) {
       if (err.code !== 'ER_NO_SUCH_TABLE') throw err;
       [rows] = await db.query(
-        `SELECT ml.*, b.name AS batch_name, 0 AS sent_count, 0 AS failed_count
+        `SELECT ml.*, b.name AS batch_name, 0 AS sent_count, 0 AS failed_count, NULL AS sample_error
          FROM message_logs ml
          LEFT JOIN batches b ON b.id = ml.batch_id
          WHERE ml.institute_id = ?
@@ -44,7 +46,7 @@ router.get('/', instituteOnly, async (req, res) => {
 // POST /api/messages/send  — general announcement to parents
 router.post('/send', instituteOnly, async (req, res) => {
   try {
-    const { type, subject, message, batchId, studentIds } = req.body;
+    const { type, subject, message, batchId, studentIds, primaryChannel } = req.body;
     if (!type || !subject || !message)
       return res.status(400).json({ success:false, message:'Type, subject and message are required' });
     if (!['test', 'ptm', 'holiday', 'custom'].includes(type))
@@ -69,6 +71,7 @@ router.post('/send', instituteOnly, async (req, res) => {
       message,
       batchId: batchId || null,
       recipients,
+      primaryChannel: primaryChannel || 'whatsapp',
       buildMessage: (student) => message.replace(/{name}/g, student.name || 'your ward')
     });
 
@@ -90,6 +93,7 @@ router.post('/send', instituteOnly, async (req, res) => {
 // Re-send login credentials of a specific student to their parent
 router.post('/send-credentials/:studentId', instituteOnly, async (req, res) => {
   try {
+    const { primaryChannel } = req.body;
     const [rows] = await db.query(
       'SELECT id,name,student_login_id,parent_name,parent_phone,batch_id FROM students WHERE id=? AND institute_id=?',
       [req.params.studentId, req.user.id]
@@ -106,6 +110,7 @@ router.post('/send-credentials/:studentId', instituteOnly, async (req, res) => {
       subject,
       message,
       batchId: s.batch_id || null,
+      primaryChannel: primaryChannel || 'whatsapp',
       recipients: [{
         student_id: s.id,
         parent_phone: s.parent_phone,
@@ -127,7 +132,7 @@ router.post('/send-credentials/:studentId', instituteOnly, async (req, res) => {
 // POST /api/messages/send-individual/:studentId
 router.post('/send-individual/:studentId', instituteOnly, async (req, res) => {
   try {
-    const { type, subject, message } = req.body;
+    const { type, subject, message, primaryChannel } = req.body;
     if (!type || !subject || !message)
       return res.status(400).json({ success:false, message:'Type, subject and message are required' });
 
@@ -144,6 +149,7 @@ router.post('/send-individual/:studentId', instituteOnly, async (req, res) => {
       subject,
       message,
       batchId: s.batch_id || null,
+      primaryChannel: primaryChannel || 'whatsapp',
       recipients: [{
         student_id: s.id,
         name: s.name,

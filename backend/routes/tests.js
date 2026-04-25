@@ -90,7 +90,7 @@ router.post('/', instituteOnly, async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO tests (institute_id, batch_id, title, subject, is_combined, components, test_date, total_marks, description)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, batchId || null, title, subject || '', isCombined ? 1 : 0, components || null, testDate, totalMarks, description || '']
+      [req.user.id, batchId || null, title, subject || '', isCombined ? 1 : 0, components ? JSON.stringify(components) : null, testDate, totalMarks, description || '']
     );
     res.status(201).json({ success: true, message: 'Test created', data: { id: result.insertId } });
   } catch (err) {
@@ -109,7 +109,7 @@ router.put('/:id', instituteOnly, async (req, res) => {
       `UPDATE tests SET title=?, subject=?, is_combined=?, components=?, test_date=?, total_marks=?, batch_id=?, description=?, updated_at=NOW()
        WHERE id=? AND institute_id=?`,
       [title||t.title, subject||t.subject, isCombined !== undefined ? (isCombined?1:0) : t.is_combined,
-       components !== undefined ? components : t.components,
+       components !== undefined ? (components ? JSON.stringify(components) : null) : t.components,
        testDate||t.test_date, totalMarks||t.total_marks,
        batchId !== undefined ? (batchId||null) : t.batch_id,
        description !== undefined ? description : t.description,
@@ -159,7 +159,7 @@ router.post('/:id/results', instituteOnly, async (req, res) => {
            grade            = VALUES(grade),
            remarks          = VALUES(remarks),
            updated_at       = NOW()`,
-        [req.params.id, r.studentId, req.user.id, marks, r.componentScores || null, g, r.remarks || '']
+        [req.params.id, r.studentId, req.user.id, marks, r.componentScores ? JSON.stringify(r.componentScores) : null, g, r.remarks || '']
       );
       saved++;
     }
@@ -276,7 +276,8 @@ router.get('/student/portal', anyAuth, async (req, res) => {
           id: stu.id, name: stu.name, class: stu.class, board: stu.board, stream: stu.stream,
           aadhar: stu.aadhar, batchName: stu.batch_name,
           instituteName: stu.institute_name, instituteCity: stu.institute_city,
-          parentName: stu.parent_name, parentPhone: stu.parent_phone,
+          parentName: stu.parent_name, parentPhone: stu.parent_phone, parentEmail: stu.parent_email,
+          studentPhone: stu.student_phone, loginId: stu.student_login_id, mustChange: !!stu.must_change_pass
         },
         attendance: {
           records: attRows,

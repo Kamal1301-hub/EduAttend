@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { batchesAPI } from '../../api';
 import { Modal, ConfirmModal, Spinner, EmptyState, StreamBadge, ClassBadge } from '../../components/UI';
@@ -7,6 +8,7 @@ import { studentsAPI } from '../../api';
 const INIT = { name: '', classLevel: '8', board: 'CBSE', stream: 'Board', timing: '' };
 
 export default function InstBatches() {
+  const navigate = useNavigate();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -14,6 +16,8 @@ export default function InstBatches() {
   const [saving, setSaving] = useState(false);
   const [batchStudents, setBatchStudents] = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [availableStudents, setAvailableStudents] = useState([]);
+  const [addingStudent, setAddingStudent] = useState(false);
 
   const load = useCallback(async () => {
     try { const r = await batchesAPI.getAll(); setBatches(r.data.data); }
@@ -54,6 +58,30 @@ export default function InstBatches() {
       setBatchStudents(r.data.data);
     } catch { toast.error('Failed to load students'); }
     finally { setLoadingStudents(false); }
+  };
+
+  const openAddExistingStudent = async (batch) => {
+    setModal({ type: 'addExistingStudent', data: batch });
+    setLoadingStudents(true);
+    try {
+      const r = await studentsAPI.getAll();
+      // Filter students not in this batch, maybe only same class
+      const available = r.data.data.filter(s => s.class === batch.class && s.batch_id !== batch.id);
+      setAvailableStudents(available);
+    } catch { toast.error('Failed to load students'); }
+    finally { setLoadingStudents(false); }
+  };
+
+  const handleAddExistingStudent = async (studentId, batchId) => {
+    setAddingStudent(true);
+    try {
+      await studentsAPI.update(studentId, { batchId });
+      toast.success('Student added to batch');
+      // refresh available students list
+      setAvailableStudents(p => p.filter(s => s.id !== studentId));
+      await load();
+    } catch { toast.error('Failed to add student'); }
+    finally { setAddingStudent(false); }
   };
 
   if (loading) return <Spinner />;
@@ -128,6 +156,11 @@ export default function InstBatches() {
 
       {modal?.type === 'viewStudents' && (
         <Modal title={`Enrolled Students — ${modal.data.name}`} onClose={() => setModal(null)} width={700}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 15 }}>
+            <button className="btn btn-blue btn-sm" onClick={() => openAddExistingStudent(modal.data)}>
+              ＋ Add Student
+            </button>
+          </div>
           {loadingStudents ? <Spinner /> : (
             <div style={{ maxHeight: 400, overflowY: 'auto' }}>
               {batchStudents.length === 0 ? <EmptyState icon="👤" message="No students enrolled in this batch yet." /> : (
@@ -142,6 +175,42 @@ export default function InstBatches() {
                           <td style={{ fontWeight: 600 }}>{s.name}</td>
                           <td style={{ fontSize: 12 }}>{s.parent_phone}</td>
                           <td><span className={`badge ${s.is_active ? 'bg' : 'br'}`} style={{ fontSize: 10 }}>{s.is_active ? 'Active' : 'Inactive'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {modal?.type === 'addExistingStudent' && (
+        <Modal title={`Add Students to ${modal.data.name}`} onClose={() => openBatchStudents(modal.data)} width={600}
+          footer={<button className="btn btn-blue" onClick={() => openBatchStudents(modal.data)}>Done</button>}>
+          <div style={{ marginBottom: 15, fontSize: 13, color: 'var(--text2)' }}>
+            Showing students in <strong>Class {modal.data.class}</strong> who are not in this batch.
+          </div>
+          {loadingStudents ? <Spinner /> : (
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              {availableStudents.length === 0 ? <EmptyState icon="👤" message={`No available Class ${modal.data.class} students found to add.`} /> : (
+                <div className="table-wrap">
+                  <table style={{ fontSize: 13 }}>
+                    <thead><tr><th>Name</th><th>Current Batch</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {availableStudents.map((s) => (
+                        <tr key={s.id}>
+                          <td style={{ fontWeight: 600 }}>
+                            {s.name}
+                            <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 'normal' }}>{s.student_login_id}</div>
+                          </td>
+                          <td style={{ color: 'var(--text2)' }}>{s.batch_name || '— Unassigned —'}</td>
+                          <td>
+                            <button className="btn btn-sm btn-navy" onClick={() => handleAddExistingStudent(s.id, modal.data.id)} disabled={addingStudent}>
+                              Add to Batch
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
