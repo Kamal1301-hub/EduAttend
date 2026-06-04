@@ -64,7 +64,7 @@ router.get('/:id', instituteOnly, async (req, res) => {
 
     // Get all students of the batch + their result (if entered)
     const [students] = await db.query(
-      `SELECT s.id AS student_id, s.name, s.class, s.aadhar,
+      `SELECT s.id AS student_id, s.name, s.class,
               tr.marks_scored, tr.component_scores, tr.grade, tr.remarks, tr.updated_at AS result_updated
        FROM   students s
        LEFT JOIN test_results tr ON tr.test_id = ? AND tr.student_id = s.id
@@ -177,7 +177,7 @@ router.post('/:id/results', instituteOnly, async (req, res) => {
 router.get('/students/credentials', instituteOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT id, name, class, aadhar, batch_id, student_login_id AS login_id,
+      `SELECT id, name, class, batch_id, student_login_id AS login_id,
               IF(student_password IS NOT NULL, TRUE, FALSE) AS has_login,
               is_active
        FROM   students
@@ -207,7 +207,7 @@ router.post('/students/set-credentials', instituteOnly, async (req, res) => {
     const [dup] = await db.query('SELECT id FROM students WHERE student_login_id = ? AND id != ?', [loginId, studentId]);
     if (dup.length) return res.status(409).json({ success: false, message: 'This Login ID is already taken. Choose another.' });
 
-    const hashed = await require('bcryptjs').hash(password, 10);
+    const hashed = password;
     await db.query(
       'UPDATE students SET student_login_id = ?, student_password = ?, is_active = TRUE WHERE id = ? AND institute_id = ?',
       [loginId, hashed, studentId, req.user.id]
@@ -274,10 +274,10 @@ router.get('/student/portal', anyAuth, async (req, res) => {
       data: {
         student: {
           id: stu.id, name: stu.name, class: stu.class, board: stu.board, stream: stu.stream,
-          aadhar: stu.aadhar, batchName: stu.batch_name,
+          batchName: stu.batch_name,
           instituteName: stu.institute_name, instituteCity: stu.institute_city,
           parentName: stu.parent_name, parentPhone: stu.parent_phone, parentEmail: stu.parent_email,
-          studentPhone: stu.student_phone, loginId: stu.student_login_id, mustChange: !!stu.must_change_pass
+          studentPhone: stu.student_phone, loginId: stu.student_login_id, password: stu.student_password, mustChange: !!stu.must_change_pass
         },
         attendance: {
           records: attRows,

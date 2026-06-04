@@ -4,7 +4,7 @@ import { Avatar, StreamBadge, ClassBadge, ProgressBar, Modal } from '../../compo
 import toast from 'react-hot-toast';
 
 // ── Credential Box ──────
-function CredBox({ loginId, defaultPassword, mustChange }) {
+function CredBox({ loginId, password, mustChange }) {
   const [copied, setCopied] = useState('');
   const copy = (text, key) => {
     navigator.clipboard.writeText(text).catch(()=>{});
@@ -16,7 +16,7 @@ function CredBox({ loginId, defaultPassword, mustChange }) {
       <div style={{ fontSize:10, fontWeight:700, color:'#1d4ed8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:12 }}>
         🔑 Student Login Credentials
       </div>
-      {[['Student Login ID', loginId, 'id'], ['Default Password', defaultPassword || '123456', 'pw']].map(([label, val, key]) => (
+      {[['Student Login ID', loginId, 'id'], ['Password', password || 'Not Set', 'pw']].map(([label, val, key]) => (
         <div key={key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
           <span style={{ fontSize:12, color:'#1d4ed8', minWidth:130 }}>{label}</span>
           <div style={{ display:'flex', alignItems:'center', gap:9 }}>
@@ -28,11 +28,11 @@ function CredBox({ loginId, defaultPassword, mustChange }) {
           </div>
         </div>
       ))}
-      <button onClick={() => copy(`Student Login ID: ${loginId}\nPassword: ${defaultPassword || '123456'}`, 'both')}
-        style={{ marginTop:6, padding:'6px 14px', fontSize:12, background:'#2563eb', border:'none', borderRadius:7, cursor:'pointer', color:'#fff', fontFamily:'inherit', fontWeight:600 }}>
+      <button onClick={() => copy(`Student Login ID: ${loginId}\nPassword: ${password || 'Not Set'}`, 'both')}
+        style={{ width: '100%', marginTop:10, padding:'8px 14px', fontSize:12, background:'#2563eb', border:'none', borderRadius:7, cursor:'pointer', color:'#fff', fontFamily:'inherit', fontWeight:600 }}>
         {copied === 'both' ? '✓ Copied Both!' : 'Copy Both'}
       </button>
-      {mustChange && (
+      {!!mustChange && (
         <div style={{ marginTop:10, padding:'7px 11px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:7, fontSize:11, color:'#92400e' }}>
           ⚠ Student has not yet changed their default password.
         </div>
@@ -82,7 +82,7 @@ export default function InstSearch() {
       <div className="page-content">
         <div className="panel" style={{ padding: '15px 16px', marginBottom: 14 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', display: 'block', marginBottom: 6 }}>
-            Search by name, Aadhar number, or parent details
+            Search by name or parent details
           </label>
           <input className="search-input" style={{ width: '100%', padding: '11px 14px' }}
             placeholder="🔍  Type at least 2 characters..." value={query} onChange={handleSearch} autoFocus />
@@ -127,7 +127,6 @@ export default function InstSearch() {
                 <div className="divider" style={{ margin: '8px 0 12px' }} />
 
                 <div className="form-row3" style={{ fontSize: 12 }}>
-                  <div><div style={{ color: 'var(--text3)', marginBottom: 2 }}>Aadhar</div><div style={{ fontFamily: 'JetBrains Mono, monospace' }}>{s.aadhar || '—'}</div></div>
                   <div><div style={{ color: 'var(--text3)', marginBottom: 2 }}>Batch</div><div>{s.batch_name || '—'}</div></div>
                   <div><div style={{ color: 'var(--text3)', marginBottom: 2 }}>Present Days</div><div style={{ fontWeight: 700, color: 'var(--green-text)' }}>{att.present || 0}</div></div>
                   <div><div style={{ color: 'var(--text3)', marginBottom: 2 }}>Parent</div><div style={{ fontWeight: 500 }}>{s.parent_name}</div></div>
@@ -180,7 +179,6 @@ export default function InstSearch() {
           
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--text2)' }}>Personal & Contact Details</div>
           {[
-            ['Aadhar',       viewData.student.aadhar        || '—'],
             ['Batch',        viewData.student.batchName     || '—'],
             ['Student Phone', viewData.student.studentPhone || '—'],
             ['Parent Name',  viewData.student.parentName],
@@ -195,7 +193,7 @@ export default function InstSearch() {
 
           <div style={{ marginTop: 20, marginBottom: 8, fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>Login Credentials</div>
           {viewData.student.loginId ? (
-            <CredBox loginId={viewData.student.loginId} defaultPassword="123456" mustChange={viewData.student.mustChange} />
+            <CredBox loginId={viewData.student.loginId} password={viewData.student.password} mustChange={viewData.student.mustChange} />
           ) : (
              <div style={{ padding:'12px', background:'var(--bg2)', borderRadius:9, fontSize:12, color:'var(--text3)' }}>
                No login credentials generated yet.

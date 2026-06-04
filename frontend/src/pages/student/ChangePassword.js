@@ -21,13 +21,13 @@ export default function ChangePassword() {
     if (form.newPassword !== form.confirm) { setError('Passwords do not match'); return; }
     setLoading(true);
     try {
-      await API.post('/students/change-password', { currentPassword: form.currentPassword, newPassword: form.newPassword });
+      await API.post('/students/change-password', { currentPassword: form.currentPassword.trim(), newPassword: form.newPassword });
       // Update user in localStorage so mustChange flag is cleared
       const savedUser = JSON.parse(localStorage.getItem('ea_user') || '{}');
       savedUser.mustChange = false;
       localStorage.setItem('ea_user', JSON.stringify(savedUser));
       toast.success('Password changed successfully! Welcome.');
-      navigate('/student');
+      window.location.href = '/student';
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to change password');
     } finally { setLoading(false); }

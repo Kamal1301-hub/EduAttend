@@ -31,7 +31,8 @@ function makeLoginId(studentId, instCode) {
 }
 
 function buildCredentialMessage(parentName, studentName, loginId) {
-  return `Dear ${parentName},\n\nYour ward ${studentName} has been registered on EduAttend.\n\nStudent Login ID: ${loginId}\nDefault Password: ${DEFAULT_PASSWORD}\n\nPlease login and change the password immediately.\n\nRegards,\nEduAttend`;
+  const websiteUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  return `Dear ${parentName},\n\nYour ward ${studentName} has been registered on EduAttend.\n\nStudent Login ID: ${loginId}\nDefault Password: ${DEFAULT_PASSWORD}\n\nLogin here: ${websiteUrl}\n\nPlease login and change the password immediately.\n\nRegards,\nEduAttend`;
 }
 
 // ── GET ALL STUDENTS ──────────────────────────────────────────
@@ -44,13 +45,12 @@ router.get('/', instituteOnly, async (req, res) => {
     const p = [req.user.id];
     if (batchId) { sql += ' AND s.batch_id = ?'; p.push(batchId); }
     if (search) {
-      sql += ' AND (s.name LIKE ? OR s.aadhar LIKE ? OR s.parent_name LIKE ? OR s.parent_phone LIKE ? OR s.student_login_id LIKE ?)';
-      const q = `%${search}%`; p.push(q,q,q,q,q);
+      sql += ' AND (s.name LIKE ? OR s.parent_name LIKE ? OR s.parent_phone LIKE ? OR s.student_login_id LIKE ?)';
+      const q = `%${search}%`; p.push(q,q,q,q);
     }
     sql += ' ORDER BY s.name ASC';
     const [rows] = await db.query(sql, p);
-    // Never expose hashed password to frontend
-    res.json({ success:true, data: rows.map(r => ({ ...r, student_password: undefined })) });
+    res.json({ success:true, data: rows });
   } catch(err) { res.status(500).json({ success:false, message:err.message }); }
 });
 
@@ -75,7 +75,6 @@ router.get('/:id', instituteOnly, async (req, res) => {
     );
 
     const student = { ...rows[0], attendance: att };
-    delete student.student_password; // never send hash
     res.json({ success:true, data: student });
   } catch(err) { res.status(500).json({ success:false, message:err.message }); }
 });
@@ -85,7 +84,7 @@ router.get('/:id', instituteOnly, async (req, res) => {
 // Sends credentials notification via Twilio (WhatsApp with SMS fallback)
 router.post('/', instituteOnly, async (req, res) => {
   try {
-    const { name, aadhar, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail } = req.body;
+    const { name, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail } = req.body;
     if (!name || !parentName || !parentPhone || !classLevel)
       return res.status(400).json({ success:false, message:'Name, class, parent name and phone are required' });
 
@@ -94,9 +93,9 @@ router.post('/', instituteOnly, async (req, res) => {
     // 1. Insert base record
     const [result] = await db.query(
       `INSERT INTO students
-         (institute_id,batch_id,name,aadhar,class,board,stream,student_phone,parent_name,parent_phone,parent_email)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [req.user.id, batchId||null, name.trim(), aadhar||'', classLevel,
+         (institute_id,batch_id,name,class,board,stream,student_phone,parent_name,parent_phone,parent_email)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [req.user.id, batchId||null, name.trim(), classLevel,
        board||'CBSE', finalStream, studentPhone?studentPhone.trim():'', parentName.trim(), parentPhone.trim(), parentEmail||'']
     );
     const studentId = result.insertId;
@@ -105,8 +104,8 @@ router.post('/', instituteOnly, async (req, res) => {
     const [[inst]] = await db.query('SELECT code FROM institutes WHERE id=?', [req.user.id]);
     const loginId  = makeLoginId(studentId, inst.code);
 
-    // 3. Hash default password (same rounds as institute passwords)
-    const hashedPass = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
+    // 3. Set default password in plain text
+    const hashedPass = DEFAULT_PASSWORD;
 
     // 4. Update student with login credentials
     await db.query(
@@ -163,14 +162,14 @@ router.put('/:id', instituteOnly, async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ success:false, message:'Student not found' });
     const s = rows[0];
-    const { name, aadhar, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail } = req.body;
+    const { name, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail } = req.body;
     const cls = classLevel || s.class;
     const finalStream = (cls==='11'||cls==='12') ? (stream!==undefined?stream:s.stream) : '';
     await db.query(
-      `UPDATE students SET name=?,aadhar=?,class=?,board=?,stream=?,batch_id=?,
+      `UPDATE students SET name=?,class=?,board=?,stream=?,batch_id=?,
        student_phone=?,parent_name=?,parent_phone=?,parent_email=?,updated_at=NOW()
        WHERE id=? AND institute_id=?`,
-      [name!==undefined?name.trim():s.name, aadhar!==undefined?aadhar:s.aadhar,
+      [name!==undefined?name.trim():s.name,
        cls, board!==undefined?board:s.board, finalStream,
        batchId!==undefined?(batchId||null):s.batch_id,
        studentPhone!==undefined?studentPhone.trim():s.student_phone,
@@ -240,7 +239,7 @@ router.patch('/:id/reset-password', instituteOnly, async (req, res) => {
       [req.params.id, req.user.id]
     );
     if (!rows.length) return res.status(404).json({ success:false, message:'Student not found' });
-    const hashed = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
+    const hashed = DEFAULT_PASSWORD;
     await db.query(
       'UPDATE students SET student_password=?, must_change_pass=TRUE WHERE id=?',
       [hashed, req.params.id]
@@ -248,7 +247,8 @@ router.patch('/:id/reset-password', instituteOnly, async (req, res) => {
     // Also notify parent about reset
     const s = rows[0];
     const subject = `Password Reset — ${s.name}`;
-    const message = `Dear ${s.parent_name},\n\nPassword for ${s.name} has been reset to the default.\n\nStudent Login ID: ${s.student_login_id}\nNew Password: ${DEFAULT_PASSWORD}\n\nPlease login and change the password.\n\nRegards,\nEduAttend`;
+    const websiteUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const message = `Dear ${s.parent_name},\n\nPassword for ${s.name} has been reset to the default.\n\nStudent Login ID: ${s.student_login_id}\nNew Password: ${DEFAULT_PASSWORD}\n\nLogin here: ${websiteUrl}\n\nPlease login and change the password.\n\nRegards,\nEduAttend`;
     const notifyResult = await notifyRecipients({
       instituteId: req.user.id,
       type: 'custom',
@@ -286,9 +286,9 @@ router.post('/change-password', studentSelf, async (req, res) => {
       return res.status(400).json({ success:false, message:'New password cannot be the default password' });
     const [rows] = await db.query('SELECT student_password FROM students WHERE id=?', [req.user.id]);
     if (!rows.length) return res.status(404).json({ success:false, message:'Student not found' });
-    const match = await bcrypt.compare(currentPassword, rows[0].student_password);
+    const match = currentPassword.trim() === rows[0].student_password.trim();
     if (!match) return res.status(401).json({ success:false, message:'Current password is incorrect' });
-    const hashed = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    const hashed = newPassword;
     await db.query(
       'UPDATE students SET student_password=?, must_change_pass=FALSE WHERE id=?',
       [hashed, req.user.id]

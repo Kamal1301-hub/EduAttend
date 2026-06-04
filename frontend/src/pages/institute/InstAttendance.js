@@ -153,7 +153,7 @@ export default function InstAttendance() {
             <div className="table-wrap">
               <table className="att-table">
                 <thead>
-                  <tr><th>#</th><th>Student Name</th><th>Aadhar</th><th>Parent Phone</th><th style={{ textAlign: 'center' }}>Present</th><th style={{ textAlign: 'center' }}>Absent</th><th style={{ textAlign: 'center' }}>Late</th></tr>
+                  <tr><th>#</th><th>Student Name</th><th>Parent Phone</th><th style={{ textAlign: 'center' }}>Present</th><th style={{ textAlign: 'center' }}>Absent</th><th style={{ textAlign: 'center' }}>Late</th></tr>
                 </thead>
                 <tbody>
                   {students.map((s, i) => {
@@ -163,7 +163,6 @@ export default function InstAttendance() {
                       <tr key={s.id}>
                         <td style={{ color: 'var(--text3)', fontWeight: 600 }}>{i + 1}</td>
                         <td style={{ fontWeight: 600 }}>{s.name}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'JetBrains Mono, monospace' }}>{s.aadhar || '—'}</td>
                         <td style={{ fontSize: 12, color: 'var(--text2)' }}>{s.parent_phone}</td>
                         {['P', 'A', 'L'].map(val => (
                           <td key={val} style={{ textAlign: 'center' }}>

@@ -16,7 +16,7 @@ router.post('/admin/login', async (req, res) => {
       return res.status(400).json({ success:false, message:'Login ID and password are required' });
 
     const [rows] = await db.query('SELECT * FROM super_admin WHERE login_id = ?', [loginId]);
-    if (!rows.length || !(await bcrypt.compare(password, rows[0].password)))
+    if (!rows.length || password !== rows[0].password)
       return res.status(401).json({ success:false, message:'Invalid credentials' });
 
     const a = rows[0];
@@ -44,7 +44,7 @@ router.post('/institute/login', async (req, res) => {
       return res.status(403).json({ success:false, message:'Account suspended. Contact EduAttend administrator.' });
     if (inst.status === 'Expired')
       return res.status(403).json({ success:false, message:'Subscription expired. Contact EduAttend administrator.' });
-    if (!(await bcrypt.compare(password, inst.password)))
+    if (password !== inst.password)
       return res.status(401).json({ success:false, message:'Invalid credentials' });
 
     const token = sign({ id:inst.id, loginId:inst.login_id, role:'institute', name:inst.name, plan:inst.plan });
@@ -88,7 +88,7 @@ router.post('/student/login', async (req, res) => {
       return res.status(401).json({ success:false, message:'Login not set up yet. Contact your institute.' });
     if (!s.is_active)
       return res.status(403).json({ success:false, message:'Account inactive. Contact your institute.' });
-    if (!(await bcrypt.compare(password, s.student_password)))
+    if (password !== s.student_password)
       return res.status(401).json({ success:false, message:'Invalid Student ID or Password' });
 
     const token = sign({

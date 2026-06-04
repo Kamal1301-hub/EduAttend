@@ -152,7 +152,7 @@ function CredBox({ loginId, password }) {
         </div>
       ))}
       <button onClick={e => copyText(`Login ID: ${loginId}\nPassword: ${password}`, e.currentTarget)}
-        style={{ marginTop:4, padding:'6px 14px', fontSize:12, background:'#2563eb', border:'none', borderRadius:7, cursor:'pointer', color:'#fff', fontFamily:'inherit', fontWeight:600 }}>
+        style={{ width: '100%', marginTop:10, padding:'8px 14px', fontSize:12, background:'#2563eb', border:'none', borderRadius:7, cursor:'pointer', color:'#fff', fontFamily:'inherit', fontWeight:600 }}>
         Copy Both
       </button>
     </div>
@@ -243,7 +243,7 @@ export default function AdminInstitutes() {
     try {
       const res = await institutesAPI.create(form);
       setAddOpen(false);
-      setNewCreds(res.data.data);
+      setNewCreds({ ...res.data.data, phone: form.phone });
       await load();
       toast.success('Institute registered!');
     } catch (err) { toast.error(err.response?.data?.message || 'Registration failed'); }
@@ -293,7 +293,7 @@ export default function AdminInstitutes() {
     try {
       const r = await institutesAPI.resetPassword(inst.id);
       setCredsData(null);
-      setPwdResult({ name:inst.name, loginId:inst.login_id, password:r.data.newPassword });
+      setPwdResult({ name:inst.name, loginId:inst.login_id, password:r.data.newPassword, phone:inst.phone });
       toast.success('Password reset!');
     } catch { toast.error('Password reset failed'); }
   };
@@ -504,7 +504,10 @@ export default function AdminInstitutes() {
             <div style={{ fontSize:13, color:'#94a3b8', marginTop:4 }}>has been successfully registered on EduAttend</div>
           </div>
           <CredBox loginId={newCreds.loginId} password={newCreds.password} />
-          <div style={{ marginTop:12, fontSize:12, color:'#94a3b8', textAlign:'center' }}>The institute can log in at the EduAttend Institute Portal using these credentials.</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+            <Btn variant="primary" onClick={() => alert(`Credentials sent via SMS/WhatsApp to ${newCreds.phone}`)}>📱 Send Credentials via Message</Btn>
+          </div>
+          <div style={{ marginTop:16, fontSize:12, color:'#94a3b8', textAlign:'center' }}>The institute can log in at the EduAttend Institute Portal using these credentials.</div>
         </Modal>
       )}
 
@@ -597,7 +600,10 @@ export default function AdminInstitutes() {
         <Modal title="Password Reset Successfully" subtitle={pwdResult.name} onClose={() => setPwdResult(null)} size={480}
           footer={<Btn variant="primary" onClick={() => setPwdResult(null)}>Done</Btn>}>
           <CredBox loginId={pwdResult.loginId} password={pwdResult.password} />
-          <div style={{ marginTop:12, fontSize:12, color:'#94a3b8', textAlign:'center' }}>Share these new credentials with the institute admin immediately.</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+            <Btn variant="amber" onClick={() => alert(`New password sent via SMS/WhatsApp to ${pwdResult.phone}`)}>📱 Send New Password via Message</Btn>
+          </div>
+          <div style={{ marginTop:16, fontSize:12, color:'#94a3b8', textAlign:'center' }}>Share these new credentials with the institute admin immediately.</div>
         </Modal>
       )}
 

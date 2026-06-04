@@ -107,7 +107,7 @@ router.post('/', superAdminOnly, async (req, res) => {
     }
 
     const plainPassword  = genPassword();
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+    const hashedPassword = plainPassword;
     const joinDate       = new Date().toISOString().split('T')[0];
     const expiryDate     = addMonths(durationMonths);
 
@@ -150,7 +150,8 @@ router.post('/', superAdminOnly, async (req, res) => {
     // ── SEND WELCOME NOTIFICATION ──
     if (phone) {
       try {
-        const welcomeMessage = `Hello ${name.trim()},\n\nWelcome to EduAttend! Your institute has been successfully registered.\n\nLogin ID: *${loginId}*\nPassword: *${plainPassword}*\n\nYou can now login and start managing your batches and students.\n\nBest Regards,\nEduAttend Team`;
+        const websiteUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const welcomeMessage = `Hello ${name.trim()},\n\nWelcome to EduAttend! Your institute has been successfully registered.\n\nLogin ID: *${loginId}*\nPassword: *${plainPassword}*\n\nLogin here: ${websiteUrl}\n\nYou can now login and start managing your batches and students.\n\nBest Regards,\nEduAttend Team`;
         
         await notifyRecipients({
           instituteId: realId,
@@ -247,7 +248,7 @@ router.patch('/:id/reset-password', superAdminOnly, async (req, res) => {
     if (!rows.length) return res.status(404).json({ success: false, message: 'Institute not found' });
 
     const plainPassword  = genPassword();
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+    const hashedPassword = plainPassword;
 
     await db.query('UPDATE institutes SET password = ? WHERE id = ?', [hashedPassword, req.params.id]);
     await db.query(
@@ -258,7 +259,8 @@ router.patch('/:id/reset-password', superAdminOnly, async (req, res) => {
     // ── SEND RESET NOTIFICATION ──
     if (rows[0].phone) {
       try {
-        const resetMessage = `Hello ${rows[0].name},\n\nYour EduAttend login password has been reset by the administrator.\n\nNew Password: *${plainPassword}*\n\nPlease login and change it for security.\n\nRegards,\nEduAttend`;
+        const websiteUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const resetMessage = `Hello ${rows[0].name},\n\nYour EduAttend login password has been reset by the administrator.\n\nNew Password: *${plainPassword}*\n\nLogin here: ${websiteUrl}\n\nPlease login and change it for security.\n\nRegards,\nEduAttend`;
         
         await notifyRecipients({
           instituteId: req.params.id,

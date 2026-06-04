@@ -5,10 +5,10 @@ import { studentsAPI, batchesAPI, messagesAPI } from '../../api';
 import { Modal, ConfirmModal, Spinner, EmptyState, Avatar, StreamBadge, ClassBadge } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 
-const INIT = { name:'', aadhar:'', classLevel:'8', board:'CBSE', stream:'Board', batchId:'', studentPhone:'', parentName:'', parentPhone:'', parentEmail:'' };
+const INIT = { name:'', classLevel:'8', board:'CBSE', stream:'Board', batchId:'', studentPhone:'', parentName:'', parentPhone:'', parentEmail:'' };
 
 // ── Credential Box (same style as institute credentials) ──────
-function CredBox({ loginId, defaultPassword, mustChange }) {
+function CredBox({ loginId, password, mustChange }) {
   const [copied, setCopied] = useState('');
   const copy = (text, key) => {
     navigator.clipboard.writeText(text).catch(()=>{});
@@ -20,7 +20,7 @@ function CredBox({ loginId, defaultPassword, mustChange }) {
       <div style={{ fontSize:10, fontWeight:700, color:'#1d4ed8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:12 }}>
         🔑 Student Login Credentials
       </div>
-      {[['Student Login ID', loginId, 'id'], ['Default Password', defaultPassword || '123456', 'pw']].map(([label, val, key]) => (
+      {[['Student Login ID', loginId, 'id'], ['Password', password || 'Not Set', 'pw']].map(([label, val, key]) => (
         <div key={key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
           <span style={{ fontSize:12, color:'#1d4ed8', minWidth:130 }}>{label}</span>
           <div style={{ display:'flex', alignItems:'center', gap:9 }}>
@@ -32,11 +32,11 @@ function CredBox({ loginId, defaultPassword, mustChange }) {
           </div>
         </div>
       ))}
-      <button onClick={() => copy(`Student Login ID: ${loginId}\nPassword: ${defaultPassword || '123456'}`, 'both')}
-        style={{ marginTop:6, padding:'6px 14px', fontSize:12, background:'#2563eb', border:'none', borderRadius:7, cursor:'pointer', color:'#fff', fontFamily:'inherit', fontWeight:600 }}>
+      <button onClick={() => copy(`Student Login ID: ${loginId}\nPassword: ${password || 'Not Set'}`, 'both')}
+        style={{ width: '100%', marginTop:10, padding:'8px 14px', fontSize:12, background:'#2563eb', border:'none', borderRadius:7, cursor:'pointer', color:'#fff', fontFamily:'inherit', fontWeight:600 }}>
         {copied === 'both' ? '✓ Copied Both!' : 'Copy Both'}
       </button>
-      {mustChange && (
+      {!!mustChange && (
         <div style={{ marginTop:10, padding:'7px 11px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:7, fontSize:11, color:'#92400e' }}>
           ⚠ Student has not yet changed their default password.
         </div>
@@ -93,7 +93,7 @@ export default function InstStudents() {
 
   const filtered = students.filter(s => {
     const q = search.toLowerCase();
-    const mQ = !q || s.name.toLowerCase().includes(q) || s.aadhar?.includes(q) || s.parent_name?.toLowerCase().includes(q) || s.parent_phone?.includes(q) || s.student_login_id?.toLowerCase().includes(q);
+    const mQ = !q || s.name.toLowerCase().includes(q) || s.parent_name?.toLowerCase().includes(q) || s.parent_phone?.includes(q) || s.student_login_id?.toLowerCase().includes(q);
     const mB = !filterBatch || String(s.batch_id) === filterBatch;
     return mQ && mB;
   });
@@ -103,7 +103,7 @@ export default function InstStudents() {
 
   const openAdd  = () => { setForm(INIT); setModal({ type:'add' }); };
   const openEdit = (s) => {
-    setForm({ name:s.name, aadhar:s.aadhar||'', classLevel:s.class, board:s.board, stream:s.stream||'Board', batchId:s.batch_id||'', studentPhone:s.student_phone||'', parentName:s.parent_name, parentPhone:s.parent_phone, parentEmail:s.parent_email||'' });
+    setForm({ name:s.name, classLevel:s.class, board:s.board, stream:s.stream||'Board', batchId:s.batch_id||'', studentPhone:s.student_phone||'', parentName:s.parent_name, parentPhone:s.parent_phone, parentEmail:s.parent_email||'' });
     setModal({ type:'edit', data:s });
   };
   const openView = async (s) => {
@@ -201,8 +201,7 @@ export default function InstStudents() {
     <>
       <div className="section-label">Student Details</div>
       <div className="form-row">
-        <div className="form-group"><label>Full Name *</label><input className="form-control" value={form.name} onChange={f('name')} placeholder="Student full name" /></div>
-        <div className="form-group"><label>Aadhar Number</label><input className="form-control" placeholder="XXXX-XXXX-XXXX" value={form.aadhar} onChange={f('aadhar')} /></div>
+        <div className="form-group" style={{ flex: 1 }}><label>Full Name *</label><input className="form-control" value={form.name} onChange={f('name')} placeholder="Student full name" /></div>
       </div>
       <div className="form-row">
         <div className="form-group"><label>Class *</label>
@@ -259,7 +258,7 @@ export default function InstStudents() {
       <div className="page-content">
 
         <div className="search-row">
-          <input className="search-input" placeholder="🔍  Search name, Aadhar, parent, login ID..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="search-input" placeholder="🔍  Search name, parent, login ID..." value={search} onChange={e => setSearch(e.target.value)} />
           <select className="form-control" style={{ width:190 }} value={filterBatch} onChange={e => setFB(e.target.value)}>
             <option value="">All Batches</option>
             {batches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
@@ -290,7 +289,6 @@ export default function InstStudents() {
                           <Avatar name={s.name} size={34} />
                           <div>
                             <div style={{ fontWeight:600 }}>{s.name}</div>
-                            <div style={{ fontSize:11, color:'var(--text3)' }}>{s.aadhar || '—'}</div>
                           </div>
                         </div>
                       </td>
@@ -342,7 +340,7 @@ export default function InstStudents() {
             </div>
           </div>
 
-          <CredBox loginId={newCreds.studentLoginId} defaultPassword={newCreds.defaultPassword} mustChange={true} />
+          <CredBox loginId={newCreds.studentLoginId} password={newCreds.defaultPassword} mustChange={true} />
 
           <div style={{ marginTop:14, padding:'11px 14px', background:'var(--blue-bg)', border:'1px solid #bfdbfe', borderRadius:9, fontSize:12, color:'var(--blue-text)', lineHeight:1.6 }}>
             📱 Credentials notification was attempted for parent number <strong>{newCreds.parentPhone}</strong>.
@@ -380,7 +378,6 @@ export default function InstStudents() {
 
           <div className="divider" />
           {[
-            ['Aadhar',       viewData.aadhar        || '—'],
             ['Batch',        viewData.batch_name     || '—'],
             ['Student Phone', viewData.student_phone || '—'],
             ['Present Days', viewData.attendance?.present || 0, 'green'],
@@ -402,7 +399,7 @@ export default function InstStudents() {
             </div>
             {viewData.student_login_id ? (
               <>
-                <CredBox loginId={viewData.student_login_id} defaultPassword="123456" mustChange={viewData.must_change_pass} />
+                <CredBox loginId={viewData.student_login_id} password={viewData.student_password} mustChange={viewData.must_change_pass} />
 
                 <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
                   <button className="btn btn-sm btn-blue" disabled={sendingCreds}

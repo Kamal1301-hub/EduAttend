@@ -3,6 +3,8 @@
 -- Run ONCE: mysql -u root -p < database.sql
 -- ============================================================
 
+DROP DATABASE IF EXISTS eduattend;
+
 CREATE DATABASE IF NOT EXISTS eduattend
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
@@ -64,7 +66,6 @@ CREATE TABLE IF NOT EXISTS students (
   institute_id      INT          NOT NULL,
   batch_id          INT,
   name              VARCHAR(150) NOT NULL,
-  aadhar            VARCHAR(20),
   class             ENUM('8','9','10','11','12','Alumni') NOT NULL,
   board             ENUM('CBSE','State') DEFAULT 'CBSE',
   stream            ENUM('NEET','JEE','Board','Both','') DEFAULT '',
@@ -201,7 +202,7 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 -- Super Admin (login_id=superadmin, password=Admin@2024)
 INSERT IGNORE INTO super_admin (login_id, password, name, email) VALUES (
   'superadmin',
-  '$2a$10$PLACEHOLDER_RUN_SEED_SCRIPT',
+  'Admin@2024',
   'Super Admin',
   'superadmin@eduattend.in'
 );
@@ -213,7 +214,7 @@ VALUES (
   'BFA2024001', 'Bright Future Academy', 'Pune', 'Maharashtra',
   'admin@bfa.edu', '9876543210', 'Dr. Ramesh Joshi',
   'Premium', 'Active', 'BFA2024001',
-  '$2a$10$PLACEHOLDER_RUN_SEED_SCRIPT',
+  'Bfa@7842',
   '2024-01-15', '2026-01-15'
 );
 
@@ -224,7 +225,7 @@ VALUES (
   'VMH2024002', 'Vidya Mandir High School', 'Mumbai', 'Maharashtra',
   'principal@vidyamandir.in', '9123456789', 'Mrs. Sunita Patil',
   'Basic', 'Active', 'VMH2024002',
-  '$2a$10$PLACEHOLDER_RUN_SEED_SCRIPT',
+  'Vmh@3361',
   '2024-03-22', '2026-03-22'
 );
 

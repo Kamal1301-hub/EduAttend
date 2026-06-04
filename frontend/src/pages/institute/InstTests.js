@@ -566,7 +566,6 @@ export default function InstTests() {
                         <td style={{ padding:'10px 13px',color:'#94a3b8',fontWeight:600 }}>{idx+1}</td>
                         <td style={{ padding:'10px 13px' }}>
                           <div style={{ fontWeight:600,color:'#0f172a' }}>{s.name}</div>
-                          <div style={{ fontSize:10,color:'#94a3b8' }}>{s.aadhar || 'No Aadhar'}</div>
                         </td>
                         <td style={{ padding:'10px 13px' }}>
                           <span style={{ padding:'2px 8px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e',whiteSpace:'nowrap' }}>Class {s.class}</span>

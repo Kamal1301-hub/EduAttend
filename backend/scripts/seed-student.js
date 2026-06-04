@@ -19,7 +19,6 @@ const DEFAULTS = {
   parentName: 'Demo Parent',
   parentPhone: '7350557473',
   parentEmail: 'parent.demo@example.com',
-  aadhar: '',
   password: '123456',
 };
 
@@ -44,7 +43,6 @@ async function main() {
     parentName: getArg('parent', DEFAULTS.parentName),
     parentPhone: getArg('phone', DEFAULTS.parentPhone),
     parentEmail: getArg('email', DEFAULTS.parentEmail),
-    aadhar: getArg('aadhar', DEFAULTS.aadhar),
     password: getArg('password', DEFAULTS.password),
   };
 
@@ -87,13 +85,12 @@ async function main() {
 
   const [insertResult] = await db.execute(
     `INSERT INTO students
-      (institute_id, batch_id, name, aadhar, class, board, stream, parent_name, parent_phone, parent_email)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (institute_id, batch_id, name, class, board, stream, parent_name, parent_phone, parent_email)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       institute.id,
       batchId,
       cfg.studentName,
-      cfg.aadhar,
       cfg.classLevel,
       cfg.board,
       finalStream,
@@ -105,7 +102,7 @@ async function main() {
 
   const studentId = insertResult.insertId;
   const loginId = makeLoginId(studentId, institute.code);
-  const hashed = await bcrypt.hash(cfg.password, 10);
+  const hashed = cfg.password;
 
   await db.execute(
     'UPDATE students SET student_login_id = ?, student_password = ?, must_change_pass = TRUE WHERE id = ?',
