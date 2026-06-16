@@ -53,7 +53,25 @@ export default function InstSearch() {
     setViewLoading(true);
     try {
       const res = await testsAPI.studentPortal(studentId);
-      setViewData(res.data.data);
+      const portalData = res.data.data;
+      if (portalData && Array.isArray(portalData.results)) {
+        portalData.results = portalData.results.map(r => {
+          if (r.components && typeof r.components === 'string') {
+            try {
+              r.components = JSON.parse(r.components);
+              if (typeof r.components === 'string') r.components = JSON.parse(r.components);
+            } catch (e) { r.components = []; }
+          }
+          if (r.component_scores && typeof r.component_scores === 'string') {
+            try {
+              r.component_scores = JSON.parse(r.component_scores);
+              if (typeof r.component_scores === 'string') r.component_scores = JSON.parse(r.component_scores);
+            } catch (e) { r.component_scores = {}; }
+          }
+          return r;
+        });
+      }
+      setViewData(portalData);
     } catch {
       toast.error('Failed to load student details');
     } finally {
@@ -137,7 +155,7 @@ export default function InstSearch() {
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   {(att.absent > 0) && (
                     <button className="btn btn-blue btn-sm"
-                      onClick={() => alert(`Notification sent to ${s.parent_name} (${s.parent_phone})\n\nDear ${s.parent_name}, your ward ${s.name} has ${att.absent} absent day(s). Please contact the institute.\n\n[Production: SMS/WhatsApp via MSG91 or Twilio]`)}>
+                      onClick={() => alert(`Notification sent to ${s.parent_name} (${s.parent_phone})\n\nDear ${s.parent_name}, your ward ${s.name} has ${att.absent} absent day(s). Please contact the institute.\n\n[Production: SMS via MSG91 or Twilio]`)}>
                       📱 Notify Parent
                     </button>
                   )}

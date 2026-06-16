@@ -71,7 +71,7 @@ router.post('/send', instituteOnly, async (req, res) => {
       message,
       batchId: batchId || null,
       recipients,
-      primaryChannel: primaryChannel || 'whatsapp',
+      primaryChannel: primaryChannel || 'sms',
       buildMessage: (student) => message.replace(/{name}/g, student.name || 'your ward')
     });
 
@@ -110,7 +110,7 @@ router.post('/send-credentials/:studentId', instituteOnly, async (req, res) => {
       subject,
       message,
       batchId: s.batch_id || null,
-      primaryChannel: primaryChannel || 'whatsapp',
+      primaryChannel: primaryChannel || 'sms',
       recipients: [{
         student_id: s.id,
         parent_phone: s.parent_phone,
@@ -149,7 +149,7 @@ router.post('/send-individual/:studentId', instituteOnly, async (req, res) => {
       subject,
       message,
       batchId: s.batch_id || null,
-      primaryChannel: primaryChannel || 'whatsapp',
+      primaryChannel: primaryChannel || 'sms',
       recipients: [{
         student_id: s.id,
         name: s.name,

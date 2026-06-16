@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { autoTable } from 'jspdf-autotable';
 import { testsAPI, batchesAPI } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -127,7 +127,16 @@ export default function InstTests() {
   const load = useCallback(async () => {
     try {
       const [t, b] = await Promise.all([testsAPI.getAll(), batchesAPI.getAll()]);
-      setTests(t.data.data);
+      const parsedTests = t.data.data.map(test => {
+        if (test.components && typeof test.components === 'string') {
+          try {
+            test.components = JSON.parse(test.components);
+            if (typeof test.components === 'string') test.components = JSON.parse(test.components);
+          } catch (e) { test.components = []; }
+        }
+        return test;
+      });
+      setTests(parsedTests);
       setBatches(b.data.data);
     } catch { toast.error('Failed to load tests'); }
     finally   { setLoading(false); }
@@ -160,7 +169,6 @@ export default function InstTests() {
       const payload = { ...form, totalMarks: Number(form.totalMarks), batchId: form.batchId || null };
       if (form.isCombined) {
         payload.totalMarks = form.components.reduce((a, c) => a + Number(c.total), 0);
-        payload.components = JSON.stringify(form.components);
       }
       await testsAPI.create(payload);
       setAddOpen(false);
@@ -189,7 +197,11 @@ export default function InstTests() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await testsAPI.update(editData.id, { ...form, totalMarks: Number(form.totalMarks), batchId: form.batchId || null });
+      const payload = { ...form, totalMarks: Number(form.totalMarks), batchId: form.batchId || null };
+      if (form.isCombined) {
+        payload.totalMarks = form.components.reduce((a, c) => a + Number(c.total), 0);
+      }
+      await testsAPI.update(editData.id, payload);
       setEditData(null); await load(); toast.success('Test updated!');
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to update'); }
     finally { setSaving(false); }
@@ -208,14 +220,27 @@ export default function InstTests() {
     try {
       const r = await testsAPI.getOne(test.id);
       const data = r.data.data;
-      if (data.components && typeof data.components === 'string') data.components = JSON.parse(data.components);
+      if (data.components && typeof data.components === 'string') {
+        try {
+          data.components = JSON.parse(data.components);
+          if (typeof data.components === 'string') data.components = JSON.parse(data.components);
+        } catch (e) { data.components = []; }
+      }
       
       // Pre-fill existing marks
       const m = {}, rm = {}, cs = {};
       data.students.forEach(s => {
         m[s.student_id]  = s.marks_scored !== null && s.marks_scored !== undefined ? String(s.marks_scored) : '';
         rm[s.student_id] = s.remarks || '';
-        cs[s.student_id] = s.component_scores ? (typeof s.component_scores === 'string' ? JSON.parse(s.component_scores) : s.component_scores) : {};
+        
+        let cScores = s.component_scores;
+        if (cScores && typeof cScores === 'string') {
+          try {
+            cScores = JSON.parse(cScores);
+            if (typeof cScores === 'string') cScores = JSON.parse(cScores);
+          } catch(e) { cScores = {}; }
+        }
+        cs[s.student_id] = cScores || {};
       });
       setMarks(m); setRemarks(rm); setCompScores(cs);
       setRTest(data);
@@ -226,20 +251,76 @@ export default function InstTests() {
   const openView = async (test) => {
     try {
       const r = await testsAPI.getOne(test.id);
-      setViewTest(r.data.data);
+      const data = r.data.data;
+      if (data.components && typeof data.components === 'string') {
+        try {
+          data.components = JSON.parse(data.components);
+          if (typeof data.components === 'string') data.components = JSON.parse(data.components);
+        } catch(e) { data.components = []; }
+      }
+      setViewTest(data);
     } catch { toast.error('Failed to load results'); }
   };
 
   // ── SAVE MARKS ────────────────────────────────────────────
   const saveMarks = async () => {
+    const isCombined = !!resultTest.is_combined;
+    for (const s of resultTest.students) {
+      if (isCombined) {
+        const studentComps = compScores[s.student_id] || {};
+        const hasAny = resultTest.components.some(c => studentComps[c.subject] !== undefined && studentComps[c.subject] !== '');
+        if (hasAny) {
+          for (const c of resultTest.components) {
+            const val = studentComps[c.subject] ?? '';
+            if (val !== '') {
+              const cNum = parseFloat(val);
+              if (isNaN(cNum) || cNum < 0 || cNum > parseFloat(c.total)) {
+                toast.error(`Invalid marks for ${s.name} in ${c.subject}. Must be between 0 and ${c.total}.`);
+                return;
+              }
+            }
+          }
+        }
+      } else {
+        const val = marks[s.student_id] ?? '';
+        if (val !== '') {
+          const mNum = parseFloat(val);
+          if (isNaN(mNum) || mNum < 0 || mNum > parseFloat(resultTest.total_marks)) {
+            toast.error(`Invalid marks for ${s.name}. Must be between 0 and ${resultTest.total_marks}.`);
+            return;
+          }
+        }
+      }
+    }
+
     setSavingM(true);
     try {
-      const results = resultTest.students.map(s => ({
-        studentId:   s.student_id,
-        marksScored: resultTest.is_combined ? Object.values(compScores[s.student_id] || {}).reduce((a,sc)=>a+(parseFloat(sc)||0), 0) : (marks[s.student_id] !== '' ? marks[s.student_id] : null),
-        remarks:     remarks[s.student_id] || '',
-        componentScores: resultTest.is_combined ? JSON.stringify(compScores[s.student_id] || {}) : null
-      }));
+      const results = resultTest.students.map(s => {
+        let marksScored = null;
+        let componentScores = null;
+
+        if (isCombined) {
+          const studentComps = compScores[s.student_id] || {};
+          const hasAny = resultTest.components.some(c => studentComps[c.subject] !== undefined && studentComps[c.subject] !== '');
+          if (hasAny) {
+            marksScored = resultTest.components.reduce((sum, c) => sum + (parseFloat(studentComps[c.subject]) || 0), 0);
+            componentScores = studentComps;
+          }
+        } else {
+          const val = marks[s.student_id] ?? '';
+          if (val !== '') {
+            marksScored = parseFloat(val);
+          }
+        }
+
+        return {
+          studentId: s.student_id,
+          marksScored,
+          remarks: remarks[s.student_id] || '',
+          componentScores
+        };
+      });
+
       await testsAPI.saveResults(resultTest.id, { results });
       toast.success('Marks saved successfully!');
       setRTest(null); await load();
@@ -340,7 +421,14 @@ export default function InstTests() {
 
   // ── STAT helpers ──────────────────────────────────────────
   const enteredCount = resultTest
-    ? resultTest.students.filter(s => marks[s.student_id] !== '' && marks[s.student_id] !== undefined).length
+    ? resultTest.students.filter(s => {
+        if (resultTest.is_combined) {
+          const studentComps = compScores[s.student_id] || {};
+          return resultTest.components.some(c => studentComps[c.subject] !== undefined && studentComps[c.subject] !== '');
+        } else {
+          return marks[s.student_id] !== '' && marks[s.student_id] !== undefined;
+        }
+      }).length
     : 0;
 
   if (loading) return (
@@ -554,13 +642,33 @@ export default function InstTests() {
                 </thead>
                 <tbody>
                   {resultTest.students.map((s, idx) => {
-                    const m   = marks[s.student_id];
-                    const mNum = resultTest.is_combined 
-                      ? Object.values(compScores[s.student_id] || {}).reduce((a, b) => a + (parseFloat(b) || 0), 0)
-                      : parseFloat(m);
-                    const valid = !isNaN(mNum) && mNum >= 0 && mNum <= parseFloat(resultTest.total_marks) && (resultTest.is_combined || (m !== '' && m !== undefined));
+                    const isCombined = !!resultTest.is_combined;
+                    let valid = false;
+                    let hasAny = false;
+                    let mNum = 0;
+
+                    if (isCombined) {
+                      const studentComps = compScores[s.student_id] || {};
+                      hasAny = resultTest.components.some(c => studentComps[c.subject] !== undefined && studentComps[c.subject] !== '');
+                      const allValid = resultTest.components.every(c => {
+                        const val = studentComps[c.subject] ?? '';
+                        if (val === '') return true;
+                        const cNum = parseFloat(val);
+                        return !isNaN(cNum) && cNum >= 0 && cNum <= parseFloat(c.total);
+                      });
+                      valid = hasAny && allValid;
+                      mNum = resultTest.components.reduce((sum, c) => sum + (parseFloat(studentComps[c.subject]) || 0), 0);
+                    } else {
+                      const val = marks[s.student_id] ?? '';
+                      hasAny = val !== '';
+                      mNum = parseFloat(val);
+                      valid = hasAny && !isNaN(mNum) && mNum >= 0 && mNum <= parseFloat(resultTest.total_marks);
+                    }
+
                     const pct  = valid ? Math.round((mNum / parseFloat(resultTest.total_marks)) * 100) : null;
                     const g    = valid ? (['A+','A','B+','B','C','D','F'][pct>=90?0:pct>=80?1:pct>=70?2:pct>=60?3:pct>=50?4:pct>=35?5:6]) : null;
+                    const isError = hasAny && !valid;
+
                     return (
                       <tr key={s.student_id} style={{ borderBottom:'1px solid #f1f5f9',background:valid?'#fafffe':'transparent' }}>
                         <td style={{ padding:'10px 13px',color:'#94a3b8',fontWeight:600 }}>{idx+1}</td>
@@ -571,41 +679,48 @@ export default function InstTests() {
                           <span style={{ padding:'2px 8px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e',whiteSpace:'nowrap' }}>Class {s.class}</span>
                         </td>
                         <td style={{ padding:'10px 13px' }}>
-                          {!resultTest.is_combined ? (
+                          {!isCombined ? (
                             <input
                               type="number" min="0" max={resultTest.total_marks} step="0.5"
                               value={marks[s.student_id] ?? ''}
                               onChange={e => setMarks(p => ({ ...p, [s.student_id]: e.target.value }))}
                               placeholder={`/ ${resultTest.total_marks}`}
-                              style={{ width:90,padding:'7px 10px',background:'#f8fafc',border:`1.5px solid ${valid?'#16a34a':m&&!valid?'#dc2626':'#e2e8f0'}`,borderRadius:8,fontSize:13,color:'#0f172a',fontFamily:'inherit',outline:'none',fontWeight:600,transition:'all 0.2s' }}
+                              style={{ width:90,padding:'7px 10px',background:'#f8fafc',border:`1.5px solid ${valid?'#16a34a':isError?'#dc2626':'#e2e8f0'}`,borderRadius:8,fontSize:13,color:'#0f172a',fontFamily:'inherit',outline:'none',fontWeight:600,transition:'all 0.2s' }}
                             />
                           ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 200 }}>
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
-                                {resultTest.components.map((c, ci) => (
-                                  <div key={ci}>
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 2 }}>{c.subject}</div>
-                                    <input
-                                      type="number" min="0" max={c.total} step="0.5"
-                                      value={compScores[s.student_id]?.[c.subject] ?? ''}
-                                      placeholder={`0 / ${c.total}`}
-                                      onChange={e => {
-                                        const ncs = { ...compScores };
-                                        if (!ncs[s.student_id]) ncs[s.student_id] = {};
-                                        ncs[s.student_id][c.subject] = e.target.value;
-                                        setCompScores(ncs);
-                                      }}
-                                      style={{ width: '100%', padding: '6px 9px', background: '#fff', border: '1px solid var(--border)', borderRadius: 7, fontSize: 13, fontWeight: 600, outline: 'none' }}
-                                    />
-                                  </div>
-                                ))}
+                                {resultTest.components.map((c, ci) => {
+                                  const val = compScores[s.student_id]?.[c.subject] ?? '';
+                                  const cNum = parseFloat(val);
+                                  const cValid = val === '' || (!isNaN(cNum) && cNum >= 0 && cNum <= parseFloat(c.total));
+                                  return (
+                                    <div key={ci}>
+                                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 2 }}>{c.subject}</div>
+                                      <input
+                                        type="number" min="0" max={c.total} step="0.5"
+                                        value={val}
+                                        placeholder={`0 / ${c.total}`}
+                                        onChange={e => {
+                                          const ncs = { ...compScores };
+                                          if (!ncs[s.student_id]) ncs[s.student_id] = {};
+                                          ncs[s.student_id][c.subject] = e.target.value;
+                                          setCompScores(ncs);
+                                        }}
+                                        style={{ width: '100%', padding: '6px 9px', background: '#fff', border: `1.5px solid ${val === '' ? 'var(--border)' : cValid ? '#16a34a' : '#dc2626'}`, borderRadius: 7, fontSize: 13, fontWeight: 600, outline: 'none' }}
+                                      />
+                                    </div>
+                                  );
+                                })}
                               </div>
-                              <div style={{ background: 'var(--blue-bg)', padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, color: 'var(--blue-text)', alignSelf: 'flex-start' }}>
-                                Sum: {mNum} / {resultTest.total_marks}
-                              </div>
+                              {hasAny && (
+                                <div style={{ background: valid ? 'var(--blue-bg)' : '#fef2f2', padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, color: valid ? 'var(--blue-text)' : '#b91c1c', alignSelf: 'flex-start', border: `1px solid ${valid ? '#bfdbfe' : '#fecaca'}` }}>
+                                  Sum: {mNum} / {resultTest.total_marks} {!valid && '(Invalid Marks)'}
+                                </div>
+                              )}
                             </div>
                           )}
-                          {m && !valid && !resultTest.is_combined && <div style={{ fontSize:11,color:'#dc2626',marginTop:3 }}>Max: {resultTest.total_marks}</div>}
+                          {isError && !isCombined && <div style={{ fontSize:11,color:'#dc2626',marginTop:3 }}>Max: {resultTest.total_marks}</div>}
                         </td>
                         <td style={{ padding:'10px 13px' }}>
                           {g ? (

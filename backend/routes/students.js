@@ -81,7 +81,7 @@ router.get('/:id', instituteOnly, async (req, res) => {
 
 // ── CREATE STUDENT ────────────────────────────────────────────
 // Auto-generates student_login_id, sets default password = "123456"
-// Sends credentials notification via Twilio (WhatsApp with SMS fallback)
+// Sends credentials notification via Twilio (SMS text message)
 router.post('/', instituteOnly, async (req, res) => {
   try {
     const { name, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail } = req.body;
@@ -113,7 +113,7 @@ router.post('/', instituteOnly, async (req, res) => {
       [loginId, hashedPass, studentId]
     );
 
-    // 5. Auto-send credentials to parent (WhatsApp with SMS fallback)
+    // 5. Auto-send credentials to parent (SMS text message)
     const subject = `Login Credentials for ${name.trim()}`;
     const message = buildCredentialMessage(parentName.trim(), name.trim(), loginId);
     const notifyResult = await notifyRecipients({

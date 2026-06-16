@@ -45,12 +45,7 @@ export default function LoginPage() {
     } finally { setLoading(false); }
   };
 
-  const DEMOS = {
-    admin:     [{ label:'Login ID', value:'superadmin' },  { label:'Password', value:'Admin@2024' }],
-    institute: [{ label:'Login ID', value:'BFA2024001' },  { label:'Password', value:'Bfa@7842'  }],
-    student:   [{ label:'Student ID', value:'STU0001BFA' },{ label:'Password', value:'123456'    }],
-  };
-  const demoKey = mode === 'admin' ? 'admin' : tab;
+
 
   return (
     <div style={{
@@ -138,16 +133,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Demo Credentials */}
-          <div style={{ background: '#f0f7ff', border: '1px solid #e0f2fe', borderRadius: 12, padding: '14px', marginBottom: 24 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Demo Credentials</div>
-            {DEMOS[demoKey].map(d => (
-              <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 13, color: '#0369a1' }}>{d.label}:</span>
-                <code style={{ fontSize: 13, fontWeight: 700, color: '#0284c7', background: '#e0f2fe', padding: '2px 6px', borderRadius: 4 }}>{d.value}</code>
-              </div>
-            ))}
-          </div>
+
 
           {error && (
             <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 12, padding: '12px 16px', color: '#b91c1c', fontSize: 13, marginBottom: 20, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -161,7 +147,6 @@ export default function LoginPage() {
                 {mode === 'admin' ? 'Admin ID' : tab === 'institute' ? 'Login ID' : 'Student ID'}
               </label>
               <input value={form.loginId} onChange={e => setForm(p => ({ ...p, loginId: e.target.value }))} required
-                placeholder={mode === 'admin' ? 'superadmin' : tab === 'institute' ? 'e.g. BFA2024001' : 'e.g. STU0001BFA'}
                 style={{ width: '100%', padding: '14px 16px', background: '#f8fafc', border: '2px solid #e2e8f0', borderRadius: 12, color: '#0f172a', fontSize: 15, fontFamily: 'inherit', outline: 'none', transition: 'all 0.2s', boxSizing: 'border-box' }}
                 onFocus={e => { e.target.style.borderColor = '#2563eb'; e.target.style.background = '#fff'; e.target.style.boxShadow = '0 0 0 4px rgba(37,99,235,0.1)'; }}
                 onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; e.target.style.boxShadow = 'none'; }} />

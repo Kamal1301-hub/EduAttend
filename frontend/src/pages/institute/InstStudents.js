@@ -185,7 +185,7 @@ export default function InstStudents() {
   const handleSendMessage = async (studentId, type, subject, message) => {
     setSendingMsg(true);
     try {
-      await messagesAPI.sendIndividual(studentId, { type, subject, message });
+      await messagesAPI.sendIndividual(studentId, { type, subject, message, primaryChannel: 'sms' });
       toast.success('Message sent to parent');
       setModal(null);
     } catch (err) {
@@ -502,7 +502,7 @@ function MessageModal({ student, onClose, onSend, sending, instName }) {
 
   return (
     <Modal title={`Message to ${student.name}'s Parent`} onClose={onClose}
-      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-navy" onClick={handleSend} disabled={sending}>{sending ? 'Sending…' : '📤 Send SMS / WhatsApp'}</button></>}>
+      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-navy" onClick={handleSend} disabled={sending}>{sending ? 'Sending…' : '📤 Send SMS'}</button></>}>
       <div style={{ marginBottom: 15 }}>
         <div className="section-label">Select Type</div>
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 5 }}>

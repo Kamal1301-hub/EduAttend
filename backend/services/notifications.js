@@ -86,12 +86,12 @@ async function trySendSMS(client, toPhone, body) {
   }
 }
 
-async function sendWithFallback({ toPhone, body, primaryChannel = 'whatsapp' }) {
+async function sendWithFallback({ toPhone, body, primaryChannel = 'sms' }) {
   const normalized = normalizePhone(toPhone);
   if (!normalized) {
     return {
       success: false,
-      primaryChannel,
+      primaryChannel: 'sms',
       usedChannel: null,
       sid: null,
       phone: null,
@@ -103,7 +103,7 @@ async function sendWithFallback({ toPhone, body, primaryChannel = 'whatsapp' }) 
   if (!client) {
     return {
       success: false,
-      primaryChannel,
+      primaryChannel: 'sms',
       usedChannel: null,
       sid: null,
       phone: normalized,
@@ -111,43 +111,15 @@ async function sendWithFallback({ toPhone, body, primaryChannel = 'whatsapp' }) 
     };
   }
 
-  const first = primaryChannel === 'sms'
-    ? await trySendSMS(client, normalized, body)
-    : await trySendWhatsApp(client, normalized, body);
-
-  if (first.ok) {
-    return {
-      success: true,
-      primaryChannel,
-      usedChannel: first.channel,
-      sid: first.sid,
-      phone: normalized,
-      error: null,
-    };
-  }
-
-  const second = primaryChannel === 'sms'
-    ? await trySendWhatsApp(client, normalized, body)
-    : await trySendSMS(client, normalized, body);
-
-  if (second.ok) {
-    return {
-      success: true,
-      primaryChannel,
-      usedChannel: second.channel,
-      sid: second.sid,
-      phone: normalized,
-      error: null,
-    };
-  }
+  const result = await trySendSMS(client, normalized, body);
 
   return {
-    success: false,
-    primaryChannel,
-    usedChannel: null,
-    sid: null,
+    success: result.ok,
+    primaryChannel: 'sms',
+    usedChannel: result.ok ? result.channel : null,
+    sid: result.sid || null,
     phone: normalized,
-    error: `${first.error}; fallback: ${second.error}`,
+    error: result.ok ? null : result.error,
   };
 }
 
@@ -190,7 +162,7 @@ async function notifyRecipients({
   batchId = null,
   recipients = [],
   buildMessage,
-  primaryChannel = 'whatsapp',
+  primaryChannel = 'sms',
 }) {
   const recipientCount = recipients.length;
   let result;

@@ -505,7 +505,7 @@ export default function AdminInstitutes() {
           </div>
           <CredBox loginId={newCreds.loginId} password={newCreds.password} />
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-            <Btn variant="primary" onClick={() => alert(`Credentials sent via SMS/WhatsApp to ${newCreds.phone}`)}>📱 Send Credentials via Message</Btn>
+            <Btn variant="primary" onClick={() => alert(`Credentials sent via SMS to ${newCreds.phone}`)}>📱 Send Credentials via SMS</Btn>
           </div>
           <div style={{ marginTop:16, fontSize:12, color:'#94a3b8', textAlign:'center' }}>The institute can log in at the EduAttend Institute Portal using these credentials.</div>
         </Modal>
@@ -601,7 +601,7 @@ export default function AdminInstitutes() {
           footer={<Btn variant="primary" onClick={() => setPwdResult(null)}>Done</Btn>}>
           <CredBox loginId={pwdResult.loginId} password={pwdResult.password} />
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-            <Btn variant="amber" onClick={() => alert(`New password sent via SMS/WhatsApp to ${pwdResult.phone}`)}>📱 Send New Password via Message</Btn>
+            <Btn variant="amber" onClick={() => alert(`New password sent via SMS to ${pwdResult.phone}`)}>📱 Send New Password via SMS</Btn>
           </div>
           <div style={{ marginTop:16, fontSize:12, color:'#94a3b8', textAlign:'center' }}>Share these new credentials with the institute admin immediately.</div>
         </Modal>

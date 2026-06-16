@@ -26,7 +26,27 @@ export default function StudentPortal() {
 
   useEffect(() => {
     testsAPI.studentPortal()
-      .then(r => setData(r.data.data))
+      .then(r => {
+        const portalData = r.data.data;
+        if (portalData && Array.isArray(portalData.results)) {
+          portalData.results = portalData.results.map(res => {
+            if (res.components && typeof res.components === 'string') {
+              try {
+                res.components = JSON.parse(res.components);
+                if (typeof res.components === 'string') res.components = JSON.parse(res.components);
+              } catch (e) { res.components = []; }
+            }
+            if (res.component_scores && typeof res.component_scores === 'string') {
+              try {
+                res.component_scores = JSON.parse(res.component_scores);
+                if (typeof res.component_scores === 'string') res.component_scores = JSON.parse(res.component_scores);
+              } catch (e) { res.component_scores = {}; }
+            }
+            return res;
+          });
+        }
+        setData(portalData);
+      })
       .catch(() => toast.error('Failed to load your data'))
       .finally(() => setLoading(false));
   }, []);
@@ -53,7 +73,7 @@ export default function StudentPortal() {
     </div>
   );
 
-  const { student, attendance, results } = data;
+  const { student, attendance, results, ranking } = data;
   const att = attendance.summary;
   const attRecords = attendance.records.filter(r => attFilter === 'all' || r.status === attFilter);
 
@@ -95,8 +115,9 @@ export default function StudentPortal() {
             {initials}
           </div>
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:18,fontWeight:700,color:'#0f172a',letterSpacing:-0.3 }}>{student.name}</div>
-            <div style={{ marginTop:5,display:'flex',gap:6,flexWrap:'wrap' }}>
+            <div style={{ fontSize:22,fontWeight:800,color:'#1e3a8a',letterSpacing:-0.5 }}>{student.instituteName}</div>
+            <div style={{ fontSize:18,fontWeight:700,color:'#0f172a',letterSpacing:-0.3,marginTop:4 }}>{student.name}</div>
+            <div style={{ marginTop:8,display:'flex',gap:6,flexWrap:'wrap' }}>
               <span style={{ padding:'2px 9px',background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:20,fontSize:11,fontWeight:600,color:'#0f766e' }}>Class {student.class}</span>
               {student.stream && <span style={{ padding:'2px 9px',background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:20,fontSize:11,fontWeight:600,color:'#1d4ed8' }}>{student.stream}</span>}
               <span style={{ padding:'2px 9px',background:'#faf5ff',border:'1px solid #e9d5ff',borderRadius:20,fontSize:11,fontWeight:600,color:'#7e22ce' }}>{student.board}</span>
@@ -115,6 +136,12 @@ export default function StudentPortal() {
               <div style={{ fontSize:22,fontWeight:700,color:'#0f172a' }}>{totalTests}</div>
               <div style={{ fontSize:11,color:'#94a3b8',marginTop:2 }}>Tests</div>
             </div>
+            {ranking && ranking.overallRank && (
+              <div style={{ textAlign:'center' }}>
+                <div style={{ fontSize:22,fontWeight:700,color:'#1d4ed8' }}>#{ranking.overallRank}</div>
+                <div style={{ fontSize:11,color:'#94a3b8',marginTop:2 }}>Overall Rank</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -269,6 +296,11 @@ export default function StudentPortal() {
                               {new Date(r.test_date).toLocaleDateString('en-IN',{ day:'numeric',month:'long',year:'numeric' })}
                             </strong></span>
                             {r.batch_name && <span>📁 {r.batch_name}</span>}
+                            {r.test_rank && (
+                              <span style={{ padding:'0 6px',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:4,color:'#d97706',fontWeight:700 }}>
+                                Rank: #{r.test_rank} / {r.total_students_test}
+                              </span>
+                            )}
                           </div>
                           {r.remarks && (
                             <div style={{ marginTop:8,padding:'6px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:7,fontSize:12,color:'#475569',fontStyle:'italic' }}>
@@ -322,6 +354,9 @@ export default function StudentPortal() {
                 </div>
                 <div style={{ fontSize:32,fontWeight:800,color:'#1e3a8a',letterSpacing:-1 }}>{viewingTest.marks_scored} <span style={{ fontSize:16,color:'#64748b' }}>/ {viewingTest.total_marks}</span></div>
                 <div style={{ fontSize:14,fontWeight:600,color:'#3b82f6',marginTop:2 }}>Overall Percentage: {Math.round((parseFloat(viewingTest.marks_scored)/parseFloat(viewingTest.total_marks))*100)}%</div>
+                {viewingTest.test_rank && (
+                  <div style={{ fontSize:15,fontWeight:700,color:'#d97706',marginTop:8 }}>Class Rank: #{viewingTest.test_rank} out of {viewingTest.total_students_test}</div>
+                )}
               </div>
 
               {/* Subject Breakdown */}

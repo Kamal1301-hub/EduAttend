@@ -18,7 +18,7 @@ export default function InstMessages() {
   const [msgSub, setMsgSub] = useState('');
   const [msgCustom, setMsgCustom] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
-  const [primaryChannel, setPrimaryChannel] = useState('whatsapp');
+  const [primaryChannel, setPrimaryChannel] = useState('sms');
   const { user } = useAuth();
 
   useEffect(() => {
@@ -137,37 +137,6 @@ export default function InstMessages() {
                     <textarea className="form-control" rows={5} placeholder="Type your announcement here..." value={msgCustom} onChange={e => setMsgCustom(e.target.value)} style={{ resize: 'vertical', minHeight: 100 }} />
                   </div>
                 )}
-
-                <div className="form-group" style={{ marginTop: 20 }}>
-                  <label style={{ display: 'block', marginBottom: 10, fontWeight: 700 }}>Delivery Channel</label>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button 
-                      onClick={() => setPrimaryChannel('whatsapp')}
-                      style={{ 
-                        flex: 1, padding: '10px', borderRadius: 8, border: `1.5px solid ${primaryChannel === 'whatsapp' ? '#25D366' : 'var(--border)'}`,
-                        background: primaryChannel === 'whatsapp' ? '#e6f9ed' : 'var(--white)', color: primaryChannel === 'whatsapp' ? '#075E54' : 'var(--text)',
-                        fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
-                      }}
-                    >
-                      <span>💬</span> WhatsApp
-                    </button>
-                    <button 
-                      onClick={() => setPrimaryChannel('sms')}
-                      style={{ 
-                        flex: 1, padding: '10px', borderRadius: 8, border: `1.5px solid ${primaryChannel === 'sms' ? 'var(--blue)' : 'var(--border)'}`,
-                        background: primaryChannel === 'sms' ? 'var(--blue-bg)' : 'var(--white)', color: primaryChannel === 'sms' ? 'var(--blue-text)' : 'var(--text)',
-                        fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
-                      }}
-                    >
-                      <span>📱</span> SMS Text
-                    </button>
-                  </div>
-                  {primaryChannel === 'whatsapp' && (
-                    <div style={{ marginTop: 10, padding: 10, background: '#fff9db', border: '1px solid #fab005', borderRadius: 6, fontSize: 10, color: '#856404' }}>
-                      <b>Note:</b> For WhatsApp, ensure recipients have joined your Twilio Sandbox (send "join sandbox-name" to your Twilio number).
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           </div>

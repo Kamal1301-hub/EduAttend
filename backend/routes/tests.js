@@ -3,6 +3,13 @@ const router  = express.Router();
 const db      = require('../config/db');
 const { instituteOnly, verifyToken } = require('../middleware/auth');
 
+// Helper to safely serialize components exactly once
+function serializeComponents(comp) {
+  if (comp === undefined || comp === null) return null;
+  if (typeof comp === 'string') return comp;
+  return JSON.stringify(comp);
+}
+
 // Middleware: student OR institute can access
 function anyAuth(req, res, next) {
   verifyToken(req, res, () => {
@@ -90,7 +97,7 @@ router.post('/', instituteOnly, async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO tests (institute_id, batch_id, title, subject, is_combined, components, test_date, total_marks, description)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, batchId || null, title, subject || '', isCombined ? 1 : 0, components ? JSON.stringify(components) : null, testDate, totalMarks, description || '']
+      [req.user.id, batchId || null, title, subject || '', isCombined ? 1 : 0, serializeComponents(components), testDate, totalMarks, description || '']
     );
     res.status(201).json({ success: true, message: 'Test created', data: { id: result.insertId } });
   } catch (err) {
@@ -109,7 +116,7 @@ router.put('/:id', instituteOnly, async (req, res) => {
       `UPDATE tests SET title=?, subject=?, is_combined=?, components=?, test_date=?, total_marks=?, batch_id=?, description=?, updated_at=NOW()
        WHERE id=? AND institute_id=?`,
       [title||t.title, subject||t.subject, isCombined !== undefined ? (isCombined?1:0) : t.is_combined,
-       components !== undefined ? (components ? JSON.stringify(components) : null) : t.components,
+       components !== undefined ? serializeComponents(components) : t.components,
        testDate||t.test_date, totalMarks||t.total_marks,
        batchId !== undefined ? (batchId||null) : t.batch_id,
        description !== undefined ? description : t.description,
@@ -146,7 +153,14 @@ router.post('/:id/results', instituteOnly, async (req, res) => {
 
     let saved = 0;
     for (const r of results) {
-      if (r.marksScored === '' || r.marksScored === null || r.marksScored === undefined) continue;
+      if (r.marksScored === '' || r.marksScored === null || r.marksScored === undefined) {
+        // Delete existing result if it exists to allow clearing marks
+        await db.query(
+          'DELETE FROM test_results WHERE test_id = ? AND student_id = ?',
+          [req.params.id, r.studentId]
+        );
+        continue;
+      }
       const marks = parseFloat(r.marksScored);
       if (isNaN(marks) || marks < 0 || marks > parseFloat(test.total_marks)) continue;
       const g = grade(marks, test.total_marks);
@@ -159,7 +173,7 @@ router.post('/:id/results', instituteOnly, async (req, res) => {
            grade            = VALUES(grade),
            remarks          = VALUES(remarks),
            updated_at       = NOW()`,
-        [req.params.id, r.studentId, req.user.id, marks, r.componentScores ? JSON.stringify(r.componentScores) : null, g, r.remarks || '']
+        [req.params.id, r.studentId, req.user.id, marks, serializeComponents(r.componentScores), g, r.remarks || '']
       );
       saved++;
     }
@@ -255,12 +269,22 @@ router.get('/student/portal', anyAuth, async (req, res) => {
     const late    = attRows.filter(a => a.status === 'L').length;
     const pct     = total > 0 ? Math.round((present / total) * 100) : 0;
 
-    // Test results — each test with date, subject, marks, total, grade
+    // Test results — each test with date, subject, marks, total, grade, and test rank
     const [results] = await db.query(
       `SELECT
          tr.id, tr.marks_scored, tr.component_scores, tr.grade, tr.remarks, tr.updated_at,
-         t.title, t.subject, t.is_combined, t.components, t.test_date, t.total_marks,
-         b.name AS batch_name
+         t.id AS test_id, t.title, t.subject, t.is_combined, t.components, t.test_date, t.total_marks,
+         b.name AS batch_name,
+         (
+           SELECT COUNT(*) + 1
+           FROM test_results tr_other
+           WHERE tr_other.test_id = tr.test_id AND (tr_other.marks_scored / t.total_marks) > (tr.marks_scored / t.total_marks)
+         ) AS test_rank,
+         (
+           SELECT COUNT(DISTINCT student_id)
+           FROM test_results
+           WHERE test_id = tr.test_id
+         ) AS total_students_test
        FROM   test_results tr
        JOIN   tests    t ON t.id  = tr.test_id
        LEFT JOIN batches b ON b.id = t.batch_id
@@ -268,6 +292,33 @@ router.get('/student/portal', anyAuth, async (req, res) => {
        ORDER  BY t.test_date DESC`,
       [studentId, instituteId]
     );
+
+    // Calculate overall rank
+    const [rankRows] = await db.query(
+      `SELECT 
+         (SELECT COUNT(*) + 1 
+          FROM (
+            SELECT student_id, AVG(marks_scored / t2.total_marks) as avg_score 
+            FROM test_results tr2 
+            JOIN tests t2 ON t2.id = tr2.test_id 
+            WHERE tr2.institute_id = ? 
+            GROUP BY student_id
+          ) sa2 
+          WHERE sa2.avg_score > sa1.avg_score
+         ) AS overall_rank,
+         (SELECT COUNT(DISTINCT student_id) FROM test_results WHERE institute_id = ?) AS total_ranked_students
+       FROM (
+         SELECT student_id, AVG(marks_scored / t3.total_marks) as avg_score 
+         FROM test_results tr3 
+         JOIN tests t3 ON t3.id = tr3.test_id 
+         WHERE tr3.institute_id = ? AND tr3.student_id = ?
+         GROUP BY student_id
+       ) sa1`,
+      [instituteId, instituteId, instituteId, studentId]
+    );
+
+    const overallRank = rankRows.length > 0 ? rankRows[0].overall_rank : null;
+    const totalRankedStudents = rankRows.length > 0 ? rankRows[0].total_ranked_students : null;
 
     res.json({
       success: true,
@@ -284,6 +335,10 @@ router.get('/student/portal', anyAuth, async (req, res) => {
           summary: { total, present, absent, late, percentage: pct }
         },
         results,
+        ranking: {
+          overallRank,
+          totalRankedStudents
+        }
       }
     });
   } catch (err) {
