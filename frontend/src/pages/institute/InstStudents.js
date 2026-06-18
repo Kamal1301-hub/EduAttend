@@ -5,7 +5,7 @@ import { studentsAPI, batchesAPI, messagesAPI } from '../../api';
 import { Modal, ConfirmModal, Spinner, EmptyState, Avatar, StreamBadge, ClassBadge } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 
-const INIT = { name:'', classLevel:'8', board:'CBSE', stream:'Board', batchId:'', studentPhone:'', parentName:'', parentPhone:'', parentEmail:'' };
+const INIT = { name:'', classLevel:'8', board:'CBSE', stream:'Board', batchId:'', studentPhone:'', parentName:'', parentPhone:'', parentEmail:'', totalFees:'' };
 
 // ── Credential Box (same style as institute credentials) ──────
 function CredBox({ loginId, password, mustChange }) {
@@ -109,7 +109,12 @@ export default function InstStudents() {
   const openView = async (s) => {
     try {
       const r = await studentsAPI.getOne(s.id);
-      setViewData(r.data.data); setModal({ type:'view' });
+      let feeData = null;
+      try {
+        const feesR = await studentsAPI.getFeeHistory(s.id);
+        feeData = feesR.data.data;
+      } catch (err) {}
+      setViewData({ ...r.data.data, fees: feeData }); setModal({ type:'view' });
     } catch { toast.error('Failed to load student'); }
   };
 
@@ -234,6 +239,13 @@ export default function InstStudents() {
         <div className="form-group"><label>Phone *</label><input className="form-control" placeholder="10-digit number" value={form.parentPhone} onChange={f('parentPhone')} /></div>
       </div>
       <div className="form-group"><label>Parent Email</label><input className="form-control" type="email" placeholder="parent@email.com" value={form.parentEmail} onChange={f('parentEmail')} /></div>
+      {modal?.type === 'add' && (
+        <>
+          <div className="divider" />
+          <div className="section-label">Fee Details</div>
+          <div className="form-group"><label>Total Fees (₹)</label><input type="number" className="form-control" placeholder="0.00" value={form.totalFees} onChange={f('totalFees')} /></div>
+        </>
+      )}
       {modal?.type === 'add' && (
         <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:9, padding:'10px 13px', fontSize:12, color:'#15803d', marginTop:4 }}>
           ✨ A <strong>Student Login ID</strong> and <strong>default password (123456)</strong> will be auto-generated and sent to the parent's phone number.
@@ -393,6 +405,11 @@ export default function InstStudents() {
             </div>
           ))}
 
+          {viewData.fees && <FeeSection studentId={viewData.id} feeData={viewData.fees} onUpdate={async () => {
+            const feesR = await studentsAPI.getFeeHistory(viewData.id);
+            setViewData({ ...viewData, fees: feesR.data.data });
+          }} />}
+
           <div style={{ marginTop:18 }}>
             <div style={{ fontSize:11, fontWeight:700, color:'var(--text3)', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>
               Login Credentials
@@ -535,5 +552,82 @@ function MessageModal({ student, onClose, onSend, sending, instName }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+function FeeSection({ studentId, feeData, onUpdate }) {
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [saving, setSaving] = useState(false);
+
+  const handleRecord = async (e) => {
+    e.preventDefault();
+    if (!amount || parseFloat(amount) <= 0) return toast.error('Enter a valid amount');
+    setSaving(true);
+    try {
+      await studentsAPI.addFeePayment(studentId, { amount, paymentDate: date });
+      toast.success('Payment recorded');
+      setAmount('');
+      onUpdate();
+    } catch (err) {
+      toast.error('Failed to record payment');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 18 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
+        Fee Details
+      </div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+        <div style={{ flex: 1, padding: 12, background: 'var(--bg2)', borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--text2)' }}>Total Fees</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>₹{feeData.totalFees}</div>
+        </div>
+        <div style={{ flex: 1, padding: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: '#16a34a' }}>Total Paid</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#15803d' }}>₹{feeData.totalPaid}</div>
+        </div>
+        <div style={{ flex: 1, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: '#dc2626' }}>Balance</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#b91c1c' }}>₹{feeData.balance}</div>
+        </div>
+      </div>
+
+      <form onSubmit={handleRecord} style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'flex-end' }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>Amount (₹)</label>
+          <input type="number" className="form-control" value={amount} onChange={e => setAmount(e.target.value)} required />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>Date</label>
+          <input type="date" className="form-control" value={date} onChange={e => setDate(e.target.value)} required />
+        </div>
+        <button type="submit" className="btn btn-blue" disabled={saving}>{saving ? '...' : '+ Record Payment'}</button>
+      </form>
+
+      {feeData.history?.length > 0 && (
+        <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+          <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+            <thead style={{ background: 'var(--bg2)' }}>
+              <tr>
+                <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>Date</th>
+                <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {feeData.history.map(h => (
+                <tr key={h.id}>
+                  <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>{new Date(h.payment_date).toLocaleDateString('en-IN')}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)', fontWeight: 600, color: '#16a34a' }}>₹{h.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

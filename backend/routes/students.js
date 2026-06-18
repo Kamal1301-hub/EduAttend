@@ -84,7 +84,7 @@ router.get('/:id', instituteOnly, async (req, res) => {
 // Sends credentials notification via Twilio (SMS text message)
 router.post('/', instituteOnly, async (req, res) => {
   try {
-    const { name, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail } = req.body;
+    const { name, classLevel, board, stream, batchId, studentPhone, parentName, parentPhone, parentEmail, totalFees } = req.body;
     if (!name || !parentName || !parentPhone || !classLevel)
       return res.status(400).json({ success:false, message:'Name, class, parent name and phone are required' });
 
@@ -93,10 +93,10 @@ router.post('/', instituteOnly, async (req, res) => {
     // 1. Insert base record
     const [result] = await db.query(
       `INSERT INTO students
-         (institute_id,batch_id,name,class,board,stream,student_phone,parent_name,parent_phone,parent_email)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+         (institute_id,batch_id,name,class,board,stream,student_phone,parent_name,parent_phone,parent_email,total_fees)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [req.user.id, batchId||null, name.trim(), classLevel,
-       board||'CBSE', finalStream, studentPhone?studentPhone.trim():'', parentName.trim(), parentPhone.trim(), parentEmail||'']
+       board||'CBSE', finalStream, studentPhone?studentPhone.trim():'', parentName.trim(), parentPhone.trim(), parentEmail||'', totalFees||0]
     );
     const studentId = result.insertId;
 
@@ -312,6 +312,93 @@ router.post('/promote', instituteOnly, async (req, res) => {
 
     res.json({ success:true, message:`Successfully promoted ${studentIds.length} students to Class ${targetClass}` });
   } catch(err) { res.status(500).json({ success:false, message:err.message }); }
+});
+
+// ── PARENT/STUDENT REQUEST MEETING ──────────────────────────────
+router.post('/meeting-request', studentSelf, async (req, res) => {
+  try {
+    const studentId = req.user.role === 'student' ? req.user.id : req.body.studentId;
+    const instituteId = req.user.role === 'student' ? req.user.instituteId : req.user.id;
+    const { facultyName, message } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ success: false, message: 'Message is required' });
+    }
+
+    // Get the student's name to prepend to the message or just to verify
+    const [students] = await db.query('SELECT name FROM students WHERE id = ? AND institute_id = ?', [studentId, instituteId]);
+    if (!students.length) return res.status(404).json({ success: false, message: 'Student not found' });
+    
+    const studentName = students[0].name;
+    const fullMessage = `[From Parent of: ${studentName}] ${message}`;
+
+    await db.query(
+      `INSERT INTO meeting_requests (institute_id, student_id, faculty_name, message)
+       VALUES (?, ?, ?, ?)`,
+      [instituteId, studentId, facultyName || null, fullMessage]
+    );
+
+    res.status(201).json({ success: true, message: 'Meeting request sent successfully' });
+  } catch (err) {
+    console.error('Meeting Request Error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GET FEE HISTORY ─────────────────────────────────────────────
+router.get('/:id/fees', studentSelf, async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    // Get student's total_fees
+    const [students] = await db.query('SELECT total_fees FROM students WHERE id = ?', [studentId]);
+    if (!students.length) return res.status(404).json({ success: false, message: 'Student not found' });
+    
+    const totalFees = parseFloat(students[0].total_fees) || 0;
+
+    // Get payment history
+    const [payments] = await db.query(
+      'SELECT id, amount, payment_date, remarks, created_at FROM fee_payments WHERE student_id = ? ORDER BY payment_date DESC, created_at DESC',
+      [studentId]
+    );
+
+    const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+    const balance = totalFees - totalPaid;
+
+    res.json({
+      success: true,
+      data: {
+        totalFees,
+        totalPaid,
+        balance,
+        history: payments
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── RECORD FEE PAYMENT ─────────────────────────────────────────
+router.post('/:id/fees', instituteOnly, async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const instituteId = req.user.id;
+    const { amount, paymentDate, remarks } = req.body;
+
+    if (!amount || !paymentDate) {
+      return res.status(400).json({ success: false, message: 'Amount and payment date are required' });
+    }
+
+    await db.query(
+      `INSERT INTO fee_payments (institute_id, student_id, amount, payment_date, remarks)
+       VALUES (?, ?, ?, ?, ?)`,
+      [instituteId, studentId, amount, paymentDate, remarks || null]
+    );
+
+    res.status(201).json({ success: true, message: 'Payment recorded successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 module.exports = router;

@@ -65,6 +65,9 @@ export const studentsAPI = {
   promote: (data) => API.post(`/students/promote`, data),
   resendCredentials: (id) => API.post(`/students/${id}/resend-credentials`),
   changePassword: (data) => API.post('/students/change-password', data),
+  requestMeeting: (data) => API.post('/students/meeting-request', data),
+  getFeeHistory: (id) => API.get(`/students/${id}/fees`),
+  addFeePayment: (id, data) => API.post(`/students/${id}/fees`, data),
 };
 
 // ─── ATTENDANCE (Institute) ────────────────────────────────────
@@ -96,4 +99,5 @@ export const testsAPI = {
   getCredentials:  ()           => API.get('/tests/students/credentials'),
   setCredentials:  (data)       => API.post('/tests/students/set-credentials', data),
   studentPortal:   (studentId)  => API.get('/tests/student/portal', { params: studentId ? { studentId } : {} }),
+  studentTestAnalysis: (testId, studentId) => API.get(`/tests/student/analysis/${testId}`, { params: studentId ? { studentId } : {} }),
 };

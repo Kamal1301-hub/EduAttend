@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { testsAPI } from '../../api';
+import { testsAPI, studentsAPI } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,15 @@ export default function StudentPortal() {
   const [tab, setTab]         = useState('attendance'); 
   const [attFilter, setAF]    = useState('all');
   const [viewingTest, setVT]  = useState(null); 
+  const [showMeetingModal, setMeetingModal] = useState(false);
+  const [meetingData, setMeetingData] = useState({ facultyName: '', message: '' });
+  const [sendingMeeting, setSendingMeeting] = useState(false);
+  const [showFeesModal, setFeesModal] = useState(false);
+  const [feesData, setFeesData] = useState(null);
+  const [showStatsModal, setStatsModal] = useState(false);
+  const [selectedStatsTest, setStatsTest] = useState(null);
+  const [testStatsData, setTestStatsData] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(false);
   const { user, logout }      = useAuth();
   const navigate              = useNavigate();
 
@@ -52,6 +61,45 @@ export default function StudentPortal() {
   }, []);
 
   const handleLogout = () => { logout(); navigate('/login'); };
+
+  const handleViewFees = async () => {
+    try {
+      const res = await studentsAPI.getFeeHistory(data.student.id);
+      setFeesData(res.data.data);
+      setFeesModal(true);
+    } catch (err) {
+      toast.error('Failed to load fees details');
+    }
+  };
+
+  const handleLoadStats = async (testId) => {
+    setLoadingStats(true);
+    setTestStatsData(null);
+    try {
+      const res = await testsAPI.studentTestAnalysis(testId);
+      setTestStatsData(res.data.data);
+    } catch (err) {
+      toast.error('Failed to load test stats');
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  const handleMeetingRequest = async (e) => {
+    e.preventDefault();
+    if (!meetingData.message.trim()) return toast.error('Message is required');
+    setSendingMeeting(true);
+    try {
+      await studentsAPI.requestMeeting(meetingData);
+      toast.success('Meeting request sent successfully!');
+      setMeetingModal(false);
+      setMeetingData({ facultyName: '', message: '' });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send meeting request');
+    } finally {
+      setSendingMeeting(false);
+    }
+  };
 
   if (loading) return (
     <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f8fafc',fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif" }}>
@@ -100,6 +148,7 @@ export default function StudentPortal() {
             <div style={{ color:'#e2e8f0',fontWeight:600 }}>{student.name}</div>
             <div>{student.instituteName}</div>
           </div>
+
           <button onClick={handleLogout}
             style={{ padding:'6px 14px',background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:8,color:'#94a3b8',cursor:'pointer',fontFamily:'inherit',fontSize:12,fontWeight:500 }}>
             Logout
@@ -150,6 +199,7 @@ export default function StudentPortal() {
           {[
             { id:'attendance', icon:'✅', label:'Attendance' },
             { id:'results',    icon:'📊', label:'Test Results' },
+            { id:'more',       icon:'⚙️', label:'More Options' },
           ].map(t => (
             <button key={t.id} onClick={()=>setTab(t.id)}
               style={{ flex:1,padding:'11px 8px',border:'none',background:tab===t.id?'#fff':'transparent',borderRadius:9,cursor:'pointer',fontFamily:'inherit',fontSize:13,fontWeight:600,color:tab===t.id?'#0f172a':'#64748b',transition:'all 0.2s',boxShadow:tab===t.id?'0 2px 6px rgba(0,0,0,0.08)':'none',display:'flex',alignItems:'center',justifyContent:'center',gap:7 }}>
@@ -331,6 +381,38 @@ export default function StudentPortal() {
           </>
         )}
 
+        {/* ══ MORE TAB ══════════════════════════════════════════ */}
+        {tab === 'more' && (
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))',gap:16 }}>
+            {/* Contact Faculty Card */}
+            <div onClick={() => setMeetingModal(true)} style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:'24px',cursor:'pointer',transition:'transform 0.2s,boxShadow 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',display:'flex',alignItems:'center',gap:16 }} onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; }}>
+              <div style={{ width:48,height:48,borderRadius:'50%',background:'#eff6ff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24 }}>👨‍🏫</div>
+              <div>
+                <div style={{ fontSize:16,fontWeight:700,color:'#0f172a' }}>Contact Faculty</div>
+                <div style={{ fontSize:13,color:'#64748b',marginTop:4 }}>Request a meeting or slot</div>
+              </div>
+            </div>
+
+            {/* Stats Card */}
+            <div onClick={() => setStatsModal(true)} style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:'24px',cursor:'pointer',transition:'transform 0.2s,boxShadow 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',display:'flex',alignItems:'center',gap:16 }} onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; }}>
+              <div style={{ width:48,height:48,borderRadius:'50%',background:'#fdf2f8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24 }}>📈</div>
+              <div>
+                <div style={{ fontSize:16,fontWeight:700,color:'#0f172a' }}>Test Analysis Stats</div>
+                <div style={{ fontSize:13,color:'#64748b',marginTop:4 }}>Detailed performance insights</div>
+              </div>
+            </div>
+
+            {/* Fees Details Card */}
+            <div onClick={handleViewFees} style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:'24px',cursor:'pointer',transition:'transform 0.2s,boxShadow 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',display:'flex',alignItems:'center',gap:16 }} onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; }}>
+              <div style={{ width:48,height:48,borderRadius:'50%',background:'#fef3c7',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24 }}>💳</div>
+              <div>
+                <div style={{ fontSize:16,fontWeight:700,color:'#0f172a' }}>Fees Details</div>
+                <div style={{ fontSize:13,color:'#64748b',marginTop:4 }}>View fee structure & due dates</div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {viewingTest && (
@@ -404,6 +486,179 @@ export default function StudentPortal() {
 
             <div style={{ padding:'16px 24px',background:'#f8fafc',borderTop:'1px solid #f1f5f9',textAlign:'right' }}>
               <button onClick={()=>setVT(null)} style={{ padding:'8px 20px',background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,fontWeight:600,color:'#475569',cursor:'pointer' }}>Close Report</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showMeetingModal && (
+        <div style={{ position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:20,backdropFilter:'blur(4px)' }}>
+          <div className="fade-in" style={{ background:'#fff',borderRadius:16,width:'100%',maxWidth:480,boxShadow:'0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ padding:'20px 24px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+              <div style={{ fontSize:16,fontWeight:700,color:'#0f172a' }}>Contact Faculty / Request Meeting</div>
+              <button onClick={() => setMeetingModal(false)} style={{ background:'#f1f5f9',border:'none',width:30,height:30,borderRadius:'50%',cursor:'pointer',fontSize:18,color:'#64748b' }}>×</button>
+            </div>
+            <form onSubmit={handleMeetingRequest} style={{ padding:24 }}>
+              <div style={{ marginBottom:16 }}>
+                <label style={{ display:'block',fontSize:13,fontWeight:600,color:'#334155',marginBottom:6 }}>Faculty Name (Optional)</label>
+                <input type="text" placeholder="e.g. Mr. Sharma" value={meetingData.facultyName} onChange={e=>setMeetingData({...meetingData, facultyName:e.target.value})}
+                  style={{ width:'100%',padding:'10px 14px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:14,color:'#0f172a',boxSizing:'border-box',fontFamily:'inherit' }} />
+              </div>
+              <div style={{ marginBottom:20 }}>
+                <label style={{ display:'block',fontSize:13,fontWeight:600,color:'#334155',marginBottom:6 }}>Message</label>
+                <textarea rows="4" placeholder="Ask for free time or book a slot..." value={meetingData.message} onChange={e=>setMeetingData({...meetingData, message:e.target.value})}
+                  style={{ width:'100%',padding:'10px 14px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:14,color:'#0f172a',boxSizing:'border-box',fontFamily:'inherit',resize:'vertical' }} required />
+              </div>
+              <div style={{ display:'flex',justifyContent:'flex-end',gap:12 }}>
+                <button type="button" onClick={() => setMeetingModal(false)} style={{ padding:'8px 16px',background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,fontWeight:600,color:'#475569',cursor:'pointer' }}>Cancel</button>
+                <button type="submit" disabled={sendingMeeting} style={{ padding:'8px 16px',background:'#2563eb',border:'none',borderRadius:8,fontSize:13,fontWeight:600,color:'#fff',cursor:sendingMeeting?'not-allowed':'pointer',opacity:sendingMeeting?0.7:1 }}>
+                  {sendingMeeting ? 'Sending...' : 'Send Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showStatsModal && (
+        <div style={{ position:'fixed',top:0,left:0,right:0,bottom:0,background:'#f8fafc',zIndex:1100,display:'flex',flexDirection:'column' }}>
+          {/* Header */}
+          <div style={{ height:64,background:'#fff',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 24px',flexShrink:0 }}>
+            <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+              <div style={{ width:36,height:36,borderRadius:'50%',background:'#eff6ff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18 }}>📈</div>
+              <div style={{ fontSize:18,fontWeight:800,color:'#0f172a' }}>Test Analysis</div>
+            </div>
+            <button onClick={() => { setStatsModal(false); setStatsTest(null); setTestStatsData(null); }} style={{ padding:'8px 16px',background:'#f1f5f9',border:'none',borderRadius:8,fontSize:14,fontWeight:600,color:'#475569',cursor:'pointer' }}>Close Stats</button>
+          </div>
+          
+          <div style={{ display:'flex',flex:1,overflow:'hidden' }}>
+            {/* Sidebar: List of Tests */}
+            <div style={{ width:320,background:'#fff',borderRight:'1px solid #e2e8f0',display:'flex',flexDirection:'column' }}>
+              <div style={{ padding:'16px 20px',borderBottom:'1px solid #f1f5f9',fontSize:13,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5 }}>Select a Test</div>
+              <div style={{ flex:1,overflowY:'auto',padding:12 }}>
+                {results.length === 0 ? (
+                  <div style={{ padding:20,textAlign:'center',color:'#94a3b8',fontSize:13 }}>No tests available</div>
+                ) : (
+                  results.map(r => (
+                    <div key={r.test_id} onClick={() => { setStatsTest(r); handleLoadStats(r.test_id); }}
+                      style={{ padding:'12px 16px',marginBottom:8,borderRadius:10,cursor:'pointer',border:`1px solid ${selectedStatsTest?.test_id === r.test_id ? '#bfdbfe' : 'transparent'}`,background:selectedStatsTest?.test_id === r.test_id ? '#eff6ff' : '#f8fafc',transition:'all 0.2s' }}>
+                      <div style={{ fontSize:14,fontWeight:700,color:selectedStatsTest?.test_id === r.test_id ? '#1d4ed8' : '#334155',marginBottom:4 }}>{r.title}</div>
+                      <div style={{ fontSize:12,color:'#64748b',display:'flex',justifyContent:'space-between' }}>
+                        <span>{r.subject}</span>
+                        <span>{Math.round((r.marks_scored/r.total_marks)*100)}%</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            {/* Main Content: Stats Details */}
+            <div style={{ flex:1,padding:32,overflowY:'auto' }}>
+              {!selectedStatsTest ? (
+                <div style={{ height:'100%',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',color:'#94a3b8' }}>
+                  <div style={{ fontSize:48,marginBottom:16 }}>📊</div>
+                  <div style={{ fontSize:16,fontWeight:600 }}>Select a test from the left to view detailed analysis</div>
+                </div>
+              ) : loadingStats ? (
+                <div style={{ height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'#64748b',fontSize:15 }}>Loading analysis...</div>
+              ) : testStatsData ? (
+                <div className="fade-in" style={{ maxWidth:900,margin:'0 auto' }}>
+                  <div style={{ fontSize:28,fontWeight:800,color:'#0f172a',marginBottom:4 }}>{testStatsData.testDetails.title}</div>
+                  <div style={{ fontSize:15,color:'#64748b',marginBottom:32 }}>{new Date(testStatsData.testDetails.testDate).toLocaleDateString('en-IN', { day:'numeric',month:'long',year:'numeric' })} • {testStatsData.testDetails.subject}</div>
+
+                  {/* Summary Blocks */}
+                  <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:20,marginBottom:32 }}>
+                    <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:24,boxShadow:'0 1px 3px rgba(0,0,0,0.04)',textAlign:'center' }}>
+                      <div style={{ fontSize:13,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5 }}>Your Marks</div>
+                      <div style={{ fontSize:32,fontWeight:800,color:'#1e3a8a',marginTop:8 }}>{testStatsData.analysis.studentMarks} <span style={{fontSize:16,color:'#94a3b8'}}>/ {testStatsData.testDetails.totalMarks}</span></div>
+                    </div>
+                    <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:24,boxShadow:'0 1px 3px rgba(0,0,0,0.04)',textAlign:'center' }}>
+                      <div style={{ fontSize:13,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5 }}>Class Average</div>
+                      <div style={{ fontSize:32,fontWeight:800,color:'#d97706',marginTop:8 }}>{Math.round(testStatsData.analysis.classAverage*10)/10}</div>
+                    </div>
+                    <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:24,boxShadow:'0 1px 3px rgba(0,0,0,0.04)',textAlign:'center' }}>
+                      <div style={{ fontSize:13,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5 }}>Highest Marks</div>
+                      <div style={{ fontSize:32,fontWeight:800,color:'#16a34a',marginTop:8 }}>{testStatsData.analysis.highestMarks}</div>
+                    </div>
+                    <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:24,boxShadow:'0 1px 3px rgba(0,0,0,0.04)',textAlign:'center' }}>
+                      <div style={{ fontSize:13,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5 }}>Overall Rank</div>
+                      <div style={{ fontSize:32,fontWeight:800,color:'#2563eb',marginTop:8 }}>#{testStatsData.analysis.overallRank} <span style={{fontSize:16,color:'#94a3b8'}}>/ {testStatsData.analysis.totalStudents}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Overall Performance Chart */}
+                  <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:28,boxShadow:'0 1px 3px rgba(0,0,0,0.04)',marginBottom:32 }}>
+                    <div style={{ fontSize:18,fontWeight:700,color:'#0f172a',marginBottom:24 }}>Overall Performance Comparison</div>
+                    <div style={{ display:'flex',alignItems:'flex-end',gap:40,height:200,paddingBottom:30,borderBottom:'1px solid #f1f5f9',position:'relative' }}>
+                      {/* Student */}
+                      <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%',position:'relative' }}>
+                        <div style={{ marginBottom:8,fontSize:14,fontWeight:700,color:'#1e3a8a' }}>{testStatsData.analysis.studentMarks}</div>
+                        <div style={{ width:60,background:'linear-gradient(to top, #3b82f6, #60a5fa)',borderRadius:'8px 8px 0 0',height:`${(testStatsData.analysis.studentMarks/testStatsData.testDetails.totalMarks)*100}%`,minHeight:20,transition:'height 1s ease-out' }}></div>
+                        <div style={{ position:'absolute',bottom:-28,fontSize:13,fontWeight:600,color:'#475569',textAlign:'center' }}>You</div>
+                      </div>
+                      {/* Average */}
+                      <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%',position:'relative' }}>
+                        <div style={{ marginBottom:8,fontSize:14,fontWeight:700,color:'#d97706' }}>{Math.round(testStatsData.analysis.classAverage*10)/10}</div>
+                        <div style={{ width:60,background:'linear-gradient(to top, #f59e0b, #fbbf24)',borderRadius:'8px 8px 0 0',height:`${(testStatsData.analysis.classAverage/testStatsData.testDetails.totalMarks)*100}%`,minHeight:20,transition:'height 1s ease-out' }}></div>
+                        <div style={{ position:'absolute',bottom:-28,fontSize:13,fontWeight:600,color:'#475569',textAlign:'center' }}>Average</div>
+                      </div>
+                      {/* Highest */}
+                      <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%',position:'relative' }}>
+                        <div style={{ marginBottom:8,fontSize:14,fontWeight:700,color:'#16a34a' }}>{testStatsData.analysis.highestMarks}</div>
+                        <div style={{ width:60,background:'linear-gradient(to top, #10b981, #34d399)',borderRadius:'8px 8px 0 0',height:`${(testStatsData.analysis.highestMarks/testStatsData.testDetails.totalMarks)*100}%`,minHeight:20,transition:'height 1s ease-out' }}></div>
+                        <div style={{ position:'absolute',bottom:-28,fontSize:13,fontWeight:600,color:'#475569',textAlign:'center' }}>Highest</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Subject-wise Analysis */}
+                  {testStatsData.testDetails.isCombined && testStatsData.analysis.subjectAnalysis?.length > 0 && (
+                    <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:28,boxShadow:'0 1px 3px rgba(0,0,0,0.04)' }}>
+                      <div style={{ fontSize:18,fontWeight:700,color:'#0f172a',marginBottom:24 }}>Subject-wise Analysis</div>
+                      <div style={{ display:'flex',flexDirection:'column',gap:24 }}>
+                        {testStatsData.analysis.subjectAnalysis.map(sub => (
+                          <div key={sub.subject} style={{ border:'1px solid #f1f5f9',borderRadius:12,padding:20,background:'#f8fafc' }}>
+                            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16 }}>
+                              <div style={{ fontSize:16,fontWeight:700,color:'#334155' }}>{sub.subject} <span style={{fontSize:13,color:'#94a3b8',fontWeight:500}}>(out of {sub.total})</span></div>
+                              {sub.rank && <div style={{ fontSize:13,fontWeight:700,color:'#2563eb',background:'#eff6ff',padding:'4px 12px',borderRadius:20 }}>Rank: #{sub.rank}</div>}
+                            </div>
+                            <div style={{ display:'flex',alignItems:'center',gap:16 }}>
+                              {/* Horizontal Bar Chart for Subject */}
+                              <div style={{ flex:1,display:'flex',flexDirection:'column',gap:12 }}>
+                                
+                                <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+                                  <div style={{ width:60,fontSize:12,color:'#475569',fontWeight:600,textAlign:'right' }}>You</div>
+                                  <div style={{ flex:1,height:12,background:'#e2e8f0',borderRadius:6,overflow:'hidden' }}>
+                                    <div style={{ height:'100%',width:`${(sub.studentMarks/sub.total)*100}%`,background:'#3b82f6',borderRadius:6 }} />
+                                  </div>
+                                  <div style={{ width:40,fontSize:13,fontWeight:700,color:'#1e3a8a' }}>{sub.studentMarks}</div>
+                                </div>
+                                
+                                <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+                                  <div style={{ width:60,fontSize:12,color:'#475569',fontWeight:600,textAlign:'right' }}>Avg</div>
+                                  <div style={{ flex:1,height:12,background:'#e2e8f0',borderRadius:6,overflow:'hidden' }}>
+                                    <div style={{ height:'100%',width:`${(sub.classAverage/sub.total)*100}%`,background:'#f59e0b',borderRadius:6 }} />
+                                  </div>
+                                  <div style={{ width:40,fontSize:13,fontWeight:700,color:'#d97706' }}>{Math.round(sub.classAverage*10)/10}</div>
+                                </div>
+
+                                <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+                                  <div style={{ width:60,fontSize:12,color:'#475569',fontWeight:600,textAlign:'right' }}>Highest</div>
+                                  <div style={{ flex:1,height:12,background:'#e2e8f0',borderRadius:6,overflow:'hidden' }}>
+                                    <div style={{ height:'100%',width:`${(sub.highestMarks/sub.total)*100}%`,background:'#10b981',borderRadius:6 }} />
+                                  </div>
+                                  <div style={{ width:40,fontSize:13,fontWeight:700,color:'#16a34a' }}>{sub.highestMarks}</div>
+                                </div>
+
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

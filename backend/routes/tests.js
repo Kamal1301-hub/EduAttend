@@ -346,4 +346,169 @@ router.get('/student/portal', anyAuth, async (req, res) => {
   }
 });
 
+// GET /api/tests/student/analysis/:testId — detailed analysis for a specific test
+router.get('/student/analysis/:testId', anyAuth, async (req, res) => {
+  try {
+    const studentId = req.user.role === 'student' ? req.user.id : parseInt(req.query.studentId);
+    const instituteId = req.user.role === 'student' ? req.user.instituteId : req.user.id;
+    const testId = req.params.testId;
+
+    if (!studentId) return res.status(400).json({ success: false, message: 'studentId required' });
+
+    // 1. Fetch test details
+    const [testRows] = await db.query(
+      `SELECT t.*, b.name AS batch_name
+       FROM tests t
+       LEFT JOIN batches b ON b.id = t.batch_id
+       WHERE t.id = ? AND t.institute_id = ?`,
+      [testId, instituteId]
+    );
+    if (!testRows.length) return res.status(404).json({ success: false, message: 'Test not found' });
+    const test = testRows[0];
+    
+    // Parse test components if string
+    if (test.components && typeof test.components === 'string') {
+      try { test.components = JSON.parse(test.components); } catch(e) { test.components = []; }
+    }
+
+    // 2. Fetch all test results for this test
+    const [results] = await db.query(
+      `SELECT student_id, marks_scored, component_scores
+       FROM test_results
+       WHERE test_id = ? AND institute_id = ?`,
+      [testId, instituteId]
+    );
+
+    // 3. Process data
+    let studentResult = null;
+    let totalMarksAll = 0;
+    let highestMarks = -1;
+    let classAverage = 0;
+    const allMarks = [];
+    
+    // For subject-wise analysis
+    const subjectStats = {};
+    if (test.is_combined && test.components) {
+      test.components.forEach(c => {
+        subjectStats[c.subject] = {
+          totalScoredAll: 0,
+          highestMarks: -1,
+          scores: []
+        };
+      });
+    }
+
+    results.forEach(r => {
+      const marks = parseFloat(r.marks_scored) || 0;
+      allMarks.push({ student_id: r.student_id, marks });
+      
+      totalMarksAll += marks;
+      if (marks > highestMarks) highestMarks = marks;
+      
+      if (r.student_id === studentId) {
+        studentResult = r;
+      }
+      
+      if (test.is_combined && r.component_scores) {
+        let compScores = r.component_scores;
+        if (typeof compScores === 'string') {
+          try { compScores = JSON.parse(compScores); } catch(e) { compScores = {}; }
+        }
+        
+        Object.keys(compScores).forEach(subject => {
+          if (subjectStats[subject]) {
+            const sc = parseFloat(compScores[subject]) || 0;
+            subjectStats[subject].scores.push({ student_id: r.student_id, marks: sc });
+            subjectStats[subject].totalScoredAll += sc;
+            if (sc > subjectStats[subject].highestMarks) {
+              subjectStats[subject].highestMarks = sc;
+            }
+          }
+        });
+      }
+    });
+
+    if (!studentResult) {
+      return res.status(404).json({ success: false, message: 'Result not found for this student' });
+    }
+
+    const totalStudents = results.length;
+    if (totalStudents > 0) {
+      classAverage = totalMarksAll / totalStudents;
+    }
+    
+    // Sort allMarks descending to find overall rank
+    allMarks.sort((a, b) => b.marks - a.marks);
+    let overallRank = 1;
+    for (let i = 0; i < allMarks.length; i++) {
+      if (allMarks[i].student_id === studentId) {
+        overallRank = i + 1;
+        break;
+      }
+    }
+    
+    // Compute subject-wise ranks and averages
+    const subjectAnalysis = [];
+    if (test.is_combined && test.components) {
+      let stuCompScores = studentResult.component_scores;
+      if (typeof stuCompScores === 'string') {
+        try { stuCompScores = JSON.parse(stuCompScores); } catch(e) { stuCompScores = {}; }
+      }
+      
+      test.components.forEach(c => {
+        const stats = subjectStats[c.subject];
+        let subRank = null;
+        let subAvg = 0;
+        let subHighest = stats.highestMarks;
+        
+        if (totalStudents > 0) {
+          subAvg = stats.totalScoredAll / totalStudents;
+        }
+        
+        stats.scores.sort((a, b) => b.marks - a.marks);
+        for (let i = 0; i < stats.scores.length; i++) {
+          if (stats.scores[i].student_id === studentId) {
+            subRank = i + 1;
+            break;
+          }
+        }
+        
+        subjectAnalysis.push({
+          subject: c.subject,
+          total: c.total,
+          studentMarks: parseFloat(stuCompScores[c.subject]) || 0,
+          classAverage: subAvg,
+          highestMarks: subHighest === -1 ? 0 : subHighest,
+          rank: subRank
+        });
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        testDetails: {
+          id: test.id,
+          title: test.title,
+          subject: test.subject,
+          testDate: test.test_date,
+          totalMarks: test.total_marks,
+          isCombined: !!test.is_combined,
+          batchName: test.batch_name
+        },
+        analysis: {
+          studentMarks: parseFloat(studentResult.marks_scored) || 0,
+          totalStudents,
+          classAverage,
+          highestMarks: highestMarks === -1 ? 0 : highestMarks,
+          overallRank,
+          subjectAnalysis
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

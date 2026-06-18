@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS students (
   student_password  VARCHAR(255),
   is_active         BOOLEAN      DEFAULT TRUE,
   must_change_pass  BOOLEAN      DEFAULT TRUE,
+  total_fees        DECIMAL(10,2) DEFAULT 0,
   created_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
   updated_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (institute_id) REFERENCES institutes(id) ON DELETE CASCADE,
@@ -192,6 +193,34 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   performed_by   VARCHAR(100) DEFAULT 'Super Admin',
   created_at     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ─── 12. MEETING REQUESTS ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS meeting_requests (
+  id           INT          PRIMARY KEY AUTO_INCREMENT,
+  institute_id INT          NOT NULL,
+  student_id   INT          NOT NULL,
+  faculty_name VARCHAR(100),
+  message      TEXT         NOT NULL,
+  status       ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+  requested_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (institute_id) REFERENCES institutes(id) ON DELETE CASCADE,
+  FOREIGN KEY (student_id)   REFERENCES students(id)   ON DELETE CASCADE
+);
+
+-- ─── 13. FEE PAYMENTS ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS fee_payments (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  institute_id INT NOT NULL,
+  student_id INT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  payment_date DATE NOT NULL,
+  remarks VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (institute_id) REFERENCES institutes(id) ON DELETE CASCADE,
+  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+);
+
+-- Note: 'total_fees' column is part of the 'students' table schema.
 
 -- ============================================================
 -- SEED DATA
