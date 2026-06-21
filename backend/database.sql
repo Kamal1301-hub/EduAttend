@@ -224,8 +224,8 @@ CREATE TABLE IF NOT EXISTS fee_payments (
 
 -- ============================================================
 -- SEED DATA
--- Run after setup: node backend/scripts/seed-passwords.js
--- That script generates correct bcrypt hashes and updates DB
+-- Run after setup: node backend/scripts/fix-passwords.js
+-- That script sets correct default passwords for seed accounts
 -- ============================================================
 
 -- Super Admin (login_id=superadmin, password=Admin@2024)
@@ -260,8 +260,8 @@ VALUES (
 
 -- ============================================================
 -- IMPORTANT: After running this file, run:
---   node backend/scripts/seed-passwords.js
--- to set correct bcrypt passwords for all seed accounts.
+--   node backend/scripts/fix-passwords.js
+-- to set correct default passwords for all seed accounts.
 -- ============================================================
 
-SELECT 'EduAttend database setup complete! Now run: node backend/scripts/seed-passwords.js' AS Next_Step;
+SELECT 'EduAttend database setup complete! Now run: node backend/scripts/fix-passwords.js' AS Next_Step;

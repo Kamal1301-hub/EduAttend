@@ -518,6 +518,76 @@ export default function StudentPortal() {
           </div>
         </div>
       )}
+      {showFeesModal && feesData && (
+        <div style={{ position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:20,backdropFilter:'blur(4px)' }}>
+          <div className="fade-in" style={{ background:'#fff',borderRadius:16,width:'100%',maxWidth:640,boxShadow:'0 20px 25px -5px rgba(0,0,0,0.1)',display:'flex',flexDirection:'column' }}>
+            <div style={{ padding:'20px 24px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+              <div style={{ fontSize:16,fontWeight:700,color:'#0f172a' }}>Fees Details & History</div>
+              <button onClick={() => setFeesModal(false)} style={{ background:'#f1f5f9',border:'none',width:30,height:30,borderRadius:'50%',cursor:'pointer',fontSize:18,color:'#64748b' }}>×</button>
+            </div>
+            
+            <div style={{ padding:24 }}>
+              {/* Summary Cards */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+                <div style={{ flex: 1, padding: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Total Fees</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>₹{feesData.totalFees}</div>
+                </div>
+                <div style={{ flex: 1, padding: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>Total Paid</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#15803d', marginTop: 4 }}>₹{feesData.totalPaid}</div>
+                </div>
+                <div style={{ flex: 1, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Balance</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#b91c1c', marginTop: 4 }}>₹{feesData.balance}</div>
+                </div>
+              </div>
+
+              {/* Payment History */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
+                Payment History
+              </div>
+              
+              {feesData.history?.length > 0 ? (
+                <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                  <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                    <thead style={{ background: '#f8fafc' }}>
+                      <tr>
+                        <th style={{ padding: '10px 14px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontWeight: 600 }}>Date</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontWeight: 600 }}>Remarks</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'right', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontWeight: 600 }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {feesData.history.map(h => (
+                        <tr key={h.id}>
+                          <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', color: '#334155' }}>
+                            {new Date(h.payment_date).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}
+                          </td>
+                          <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', color: '#64748b', fontStyle: 'italic' }}>
+                            {h.remarks || '—'}
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', borderBottom: '1px solid #f1f5f9', fontWeight: 700, color: '#16a34a' }}>
+                            ₹{h.amount}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ padding: '24px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                  No payment history recorded yet.
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding:'16px 24px', background:'#f8fafc', borderTop:'1px solid #f1f5f9', textAlign:'right' }}>
+              <button onClick={() => setFeesModal(false)} style={{ padding:'8px 20px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, fontSize:13, fontWeight:600, color:'#475569', cursor:'pointer' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showStatsModal && (
         <div style={{ position:'fixed',top:0,left:0,right:0,bottom:0,background:'#f8fafc',zIndex:1100,display:'flex',flexDirection:'column' }}>
           {/* Header */}

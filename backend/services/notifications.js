@@ -111,11 +111,20 @@ async function sendWithFallback({ toPhone, body, primaryChannel = 'sms' }) {
     };
   }
 
-  const result = await trySendSMS(client, normalized, body);
+  let result;
+  if (primaryChannel === 'whatsapp') {
+    result = await trySendWhatsApp(client, normalized, body);
+    if (!result.ok) {
+      // Fallback to SMS
+      result = await trySendSMS(client, normalized, body);
+    }
+  } else {
+    result = await trySendSMS(client, normalized, body);
+  }
 
   return {
     success: result.ok,
-    primaryChannel: 'sms',
+    primaryChannel,
     usedChannel: result.ok ? result.channel : null,
     sid: result.sid || null,
     phone: normalized,

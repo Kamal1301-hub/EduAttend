@@ -349,6 +349,9 @@ router.post('/meeting-request', studentSelf, async (req, res) => {
 router.get('/:id/fees', studentSelf, async (req, res) => {
   try {
     const studentId = req.params.id;
+    if (req.user.role === 'student' && parseInt(req.user.id) !== parseInt(studentId)) {
+      return res.status(403).json({ success: false, message: 'Access denied: Cannot view other student\'s fees' });
+    }
     // Get student's total_fees
     const [students] = await db.query('SELECT total_fees FROM students WHERE id = ?', [studentId]);
     if (!students.length) return res.status(404).json({ success: false, message: 'Student not found' });

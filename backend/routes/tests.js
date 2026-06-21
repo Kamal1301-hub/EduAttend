@@ -153,6 +153,13 @@ router.post('/:id/results', instituteOnly, async (req, res) => {
 
     let saved = 0;
     for (const r of results) {
+      // Validate that the student belongs to this institute
+      const [studentRows] = await db.query(
+        'SELECT id FROM students WHERE id = ? AND institute_id = ?',
+        [r.studentId, req.user.id]
+      );
+      if (!studentRows.length) continue;
+
       if (r.marksScored === '' || r.marksScored === null || r.marksScored === undefined) {
         // Delete existing result if it exists to allow clearing marks
         await db.query(

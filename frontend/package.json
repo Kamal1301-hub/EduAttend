@@ -18,6 +18,14 @@
     "build": "react-scripts build"
   },
   "proxy": "http://127.0.0.1:5001",
+  "overrides": {
+    "svgo": "^2.8.0",
+    "source-map": "^0.7.4"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "browserslist": {
     "production": [
       ">0.2%",
