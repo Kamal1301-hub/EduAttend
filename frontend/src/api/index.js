@@ -100,4 +100,5 @@ export const testsAPI = {
   setCredentials:  (data)       => API.post('/tests/students/set-credentials', data),
   studentPortal:   (studentId)  => API.get('/tests/student/portal', { params: studentId ? { studentId } : {} }),
   studentTestAnalysis: (testId, studentId) => API.get(`/tests/student/analysis/${testId}`, { params: studentId ? { studentId } : {} }),
+  studentMonthlyReport: (month, studentId) => API.get('/tests/student/monthly-report', { params: { month, studentId } }),
 };

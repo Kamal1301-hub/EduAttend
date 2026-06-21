@@ -335,7 +335,8 @@ router.get('/student/portal', anyAuth, async (req, res) => {
           batchName: stu.batch_name,
           instituteName: stu.institute_name, instituteCity: stu.institute_city,
           parentName: stu.parent_name, parentPhone: stu.parent_phone, parentEmail: stu.parent_email,
-          studentPhone: stu.student_phone, loginId: stu.student_login_id, password: stu.student_password, mustChange: !!stu.must_change_pass
+          studentPhone: stu.student_phone, loginId: stu.student_login_id, password: stu.student_password, mustChange: !!stu.must_change_pass,
+          createdAt: stu.created_at
         },
         attendance: {
           records: attRows,
@@ -518,4 +519,283 @@ router.get('/student/analysis/:testId', anyAuth, async (req, res) => {
   }
 });
 
+// Helper for date calculations
+function getPrevMonth(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  let prevY = y;
+  let prevM = m - 1;
+  if (prevM === 0) {
+    prevM = 12;
+    prevY = y - 1;
+  }
+  return `${prevY}-${String(prevM).padStart(2, '0')}`;
+}
+
+// Helper to calculate rank in a batch for a specific month
+async function getBatchRankForMonth(batchId, studentId, month, instituteId) {
+  if (!batchId) return { rank: null, total: 0 };
+  const [rows] = await db.query(
+    `SELECT student_id, AVG(marks_scored / t.total_marks) as avg_score
+     FROM test_results tr
+     JOIN tests t ON t.id = tr.test_id
+     WHERE t.batch_id = ? AND DATE_FORMAT(t.test_date, '%Y-%m') = ? AND tr.institute_id = ?
+     GROUP BY student_id
+     ORDER BY avg_score DESC`,
+    [batchId, month, instituteId]
+  );
+  if (!rows.length) return { rank: null, total: 0 };
+  const index = rows.findIndex(r => r.student_id === studentId);
+  return {
+    rank: index !== -1 ? index + 1 : null,
+    total: rows.length
+  };
+}
+
+// GET /api/tests/student/monthly-report — complete monthly statistics for a student
+router.get('/student/monthly-report', anyAuth, async (req, res) => {
+  try {
+    const studentId   = req.user.role === 'student' ? req.user.id   : parseInt(req.query.studentId);
+    const instituteId = req.user.role === 'student' ? req.user.instituteId : req.user.id;
+    let month = req.query.month; // format: YYYY-MM
+
+    if (!studentId) {
+      return res.status(400).json({ success: false, message: 'studentId is required' });
+    }
+
+    // 1. Get student and batch info
+    const [stuRows] = await db.query(
+      `SELECT s.*, b.name AS batch_name, i.name AS institute_name
+       FROM   students s
+       LEFT JOIN batches    b ON b.id  = s.batch_id
+       LEFT JOIN institutes i ON i.id = s.institute_id
+       WHERE  s.id = ? AND s.institute_id = ?`,
+      [studentId, instituteId]
+    );
+    if (!stuRows.length) return res.status(404).json({ success: false, message: 'Student not found' });
+    const stu = stuRows[0];
+
+    // If month not specified, find the most recent month with test results or attendance data, otherwise default to current month
+    if (!month) {
+      const [recentTestMonth] = await db.query(
+        `SELECT DATE_FORMAT(t.test_date, '%Y-%m') AS m
+         FROM test_results tr
+         JOIN tests t ON t.id = tr.test_id
+         WHERE tr.student_id = ? AND tr.institute_id = ?
+         ORDER BY t.test_date DESC LIMIT 1`,
+        [studentId, instituteId]
+      );
+      if (recentTestMonth.length) {
+        month = recentTestMonth[0].m;
+      } else {
+        const [recentAttMonth] = await db.query(
+          `SELECT DATE_FORMAT(date, '%Y-%m') AS m FROM attendance
+           WHERE student_id = ? AND institute_id = ?
+           ORDER BY date DESC LIMIT 1`,
+          [studentId, instituteId]
+        );
+        if (recentAttMonth.length) {
+          month = recentAttMonth[0].m;
+        } else {
+          month = new Date().toISOString().slice(0, 7);
+        }
+      }
+    }
+
+    const prevMonth = getPrevMonth(month);
+
+    // 2. Attendance Stats
+    const [attRows] = await db.query(
+      `SELECT date, status FROM attendance
+       WHERE student_id = ? AND DATE_FORMAT(date, '%Y-%m') = ? AND institute_id = ?
+       ORDER BY date ASC`,
+      [studentId, month, instituteId]
+    );
+    const totalDays = attRows.length;
+    const presentDays = attRows.filter(a => a.status === 'P').length;
+    const absentDays = attRows.filter(a => a.status === 'A').length;
+    const lateDays = attRows.filter(a => a.status === 'L').length;
+    const attendancePct = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+
+    const [prevAttRows] = await db.query(
+      `SELECT status FROM attendance
+       WHERE student_id = ? AND DATE_FORMAT(date, '%Y-%m') = ? AND institute_id = ?`,
+      [studentId, prevMonth, instituteId]
+    );
+    const prevTotalDays = prevAttRows.length;
+    const prevPresentDays = prevAttRows.filter(a => a.status === 'P').length;
+    const prevAttendancePct = prevTotalDays > 0 ? Math.round((prevPresentDays / prevTotalDays) * 100) : 0;
+
+    // 3. Test Stats
+    const [testRows] = await db.query(
+      `SELECT tr.marks_scored, t.total_marks, t.subject, t.title, t.test_date
+       FROM test_results tr
+       JOIN tests t ON t.id = tr.test_id
+       WHERE tr.student_id = ? AND DATE_FORMAT(t.test_date, '%Y-%m') = ? AND tr.institute_id = ?
+       ORDER BY t.test_date ASC`,
+      [studentId, month, instituteId]
+    );
+
+    let highestScore = null;
+    let lowestScore = null;
+    let totalPct = 0;
+    const subjectScores = {};
+
+    testRows.forEach(r => {
+      const marks = parseFloat(r.marks_scored) || 0;
+      const total = parseFloat(r.total_marks) || 100;
+      const pct = (marks / total) * 100;
+
+      if (highestScore === null || pct > highestScore) highestScore = pct;
+      if (lowestScore === null || pct < lowestScore) lowestScore = pct;
+      totalPct += pct;
+
+      if (!subjectScores[r.subject]) {
+        subjectScores[r.subject] = { totalPct: 0, count: 0 };
+      }
+      subjectScores[r.subject].totalPct += pct;
+      subjectScores[r.subject].count += 1;
+    });
+
+    const testsAttempted = testRows.length;
+    const averageScore = testsAttempted > 0 ? Math.round(totalPct / testsAttempted) : 0;
+    highestScore = highestScore !== null ? Math.round(highestScore) : null;
+    lowestScore = lowestScore !== null ? Math.round(lowestScore) : null;
+
+    const subjectStats = Object.keys(subjectScores).map(sub => ({
+      subject: sub,
+      average: Math.round(subjectScores[sub].totalPct / subjectScores[sub].count)
+    }));
+
+    // Previous month tests
+    const [prevTestRows] = await db.query(
+      `SELECT tr.marks_scored, t.total_marks
+       FROM test_results tr
+       JOIN tests t ON t.id = tr.test_id
+       WHERE tr.student_id = ? AND DATE_FORMAT(t.test_date, '%Y-%m') = ? AND tr.institute_id = ?`,
+      [studentId, prevMonth, instituteId]
+    );
+
+    let prevTotalPct = 0;
+    prevTestRows.forEach(r => {
+      prevTotalPct += (parseFloat(r.marks_scored) / parseFloat(r.total_marks)) * 100;
+    });
+    const prevAverageScore = prevTestRows.length > 0 ? Math.round(prevTotalPct / prevTestRows.length) : 0;
+
+    // 4. Batch Ranking & rank trend
+    const currentRankData = await getBatchRankForMonth(stu.batch_id, studentId, month, instituteId);
+    const prevRankData = await getBatchRankForMonth(stu.batch_id, studentId, prevMonth, instituteId);
+
+    const recentMonths = [];
+    let cur = month;
+    for (let i = 0; i < 6; i++) {
+      recentMonths.push(cur);
+      cur = getPrevMonth(cur);
+    }
+    recentMonths.reverse();
+
+    const rankHistory = [];
+    for (const m of recentMonths) {
+      const { rank } = await getBatchRankForMonth(stu.batch_id, studentId, m, instituteId);
+      rankHistory.push({ month: m, rank });
+    }
+
+    // 5. Actionable observations
+    let strongestSubject = '—';
+    let weakestSubject = '—';
+    if (subjectStats.length > 0) {
+      const sortedSubjects = [...subjectStats].sort((a, b) => b.average - a.average);
+      strongestSubject = sortedSubjects[0].subject;
+      if (sortedSubjects.length > 1) {
+        weakestSubject = sortedSubjects[sortedSubjects.length - 1].subject;
+      }
+    }
+
+    const observations = [];
+    if (attendancePct >= 90) {
+      observations.push("Excellent attendance consistency! Keep maintaining this standard to ensure complete subject coverage.");
+    } else if (attendancePct < 75) {
+      observations.push("Critically low attendance this month. Missing classes directly affects performance; prioritize attending class regularly.");
+    } else {
+      observations.push("Good attendance this month, but there's room to minimize absences and avoid missing key lectures.");
+    }
+
+    if (testsAttempted > 0) {
+      if (averageScore >= 85) {
+        observations.push(`Superb academic performance in tests with an average score of ${averageScore}%. Continue this rigorous effort.`);
+      } else if (averageScore < 50) {
+        observations.push(`Your average test score is below 50%. Regular revision and practicing test questions will help boost understanding.`);
+      } else {
+        observations.push(`Decent academic test performance this month. Focus on weak topics to convert these average scores into high scores.`);
+      }
+    } else {
+      observations.push("No tests were attempted this month. Ensure you take all scheduled tests to track your progress.");
+    }
+
+    if (weakestSubject !== '—') {
+      const weakAvg = Math.round(subjectScores[weakestSubject].totalPct / subjectScores[weakestSubject].count);
+      if (weakAvg < 60) {
+        observations.push(`Attention needed in ${weakestSubject}. Dedicating extra study sessions and seeking faculty help is recommended.`);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        student: {
+          id: stu.id,
+          name: stu.name,
+          class: stu.class,
+          board: stu.board,
+          stream: stu.stream,
+          batchName: stu.batch_name,
+          instituteName: stu.institute_name,
+          reportingMonth: month
+        },
+        overview: {
+          attendancePct,
+          prevAttendancePct,
+          averageScore,
+          prevAverageScore,
+          highestScore,
+          lowestScore,
+          testsAttempted,
+          prevTestsAttempted: prevTestRows.length,
+          currentRank: currentRankData.rank,
+          totalStudents: currentRankData.total,
+          prevRank: prevRankData.rank,
+          prevTotalStudents: prevRankData.total
+        },
+        charts: {
+          testTrend: testRows.map(r => ({
+            title: r.title,
+            subject: r.subject,
+            date: r.test_date,
+            score: Math.round((parseFloat(r.marks_scored) / parseFloat(r.total_marks)) * 100)
+          })),
+          subjectStats,
+          attendanceTrend: attRows.map(a => ({
+            date: a.date,
+            status: a.status
+          })),
+          rankHistory
+        },
+        statistics: {
+          totalDays,
+          presentDays,
+          absentDays,
+          lateDays
+        },
+        insights: {
+          strongestSubject,
+          weakestSubject,
+          observations
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
+

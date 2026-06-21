@@ -15,6 +15,258 @@ function statusBg(s)    { return s==='P'?'#f0fdf4':s==='A'?'#fef2f2':'#fffbeb'; 
 function statusLabel(s) { return s==='P'?'Present':s==='A'?'Absent':'Late'; }
 function pctColor(p)    { return p>=75?'#16a34a':p>=50?'#d97706':'#dc2626'; }
 
+const renderTestTrendChart = (testTrend) => {
+  if (!testTrend || testTrend.length === 0) {
+    return (
+      <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #e2e8f0', borderRadius: 8, color: '#94a3b8', fontSize: 13 }}>
+        No test scores recorded this month.
+      </div>
+    );
+  }
+  const width = 500;
+  const height = 180;
+  const padding = { top: 20, right: 30, bottom: 30, left: 40 };
+
+  const points = testTrend.map((t, idx) => {
+    const x = padding.left + (idx / Math.max(1, testTrend.length - 1)) * (width - padding.left - padding.right);
+    const y = height - padding.bottom - (t.score / 100) * (height - padding.top - padding.bottom);
+    return { x, y, score: t.score, title: t.title, subject: t.subject };
+  });
+
+  const linePath = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaPath = testTrend.length > 0 
+    ? `${linePath} L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`
+    : '';
+
+  return (
+    <div style={{ width: '100%', overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', minWidth: 350, height: 'auto', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2"/>
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {[0, 25, 50, 75, 100].map(val => {
+          const y = height - padding.bottom - (val / 100) * (height - padding.top - padding.bottom);
+          return (
+            <g key={val}>
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#f1f5f9" strokeWidth="1" />
+              <text x={padding.left - 10} y={y + 4} textAnchor="end" style={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}>{val}%</text>
+            </g>
+          );
+        })}
+        {areaPath && <path d={areaPath} fill="url(#lineGrad)" />}
+        {linePath && <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+        {points.map((p, idx) => (
+          <g key={idx}>
+            <circle cx={p.x} cy={p.y} r="4" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+            <text x={p.x} y={p.y - 8} textAnchor="middle" style={{ fontSize: 10, fill: '#1e3a8a', fontWeight: 700 }}>
+              {p.score}%
+            </text>
+            <text x={p.x} y={height - 10} textAnchor="middle" style={{ fontSize: 9, fill: '#64748b', fontWeight: 600 }}>
+              {p.subject.slice(0, 5)}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+};
+
+const renderSubjectBarChart = (subjectStats) => {
+  if (!subjectStats || subjectStats.length === 0) {
+    return (
+      <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #e2e8f0', borderRadius: 8, color: '#94a3b8', fontSize: 13 }}>
+        No subject statistics available.
+      </div>
+    );
+  }
+  const width = 500;
+  const height = 180;
+  const padding = { top: 20, right: 20, bottom: 30, left: 40 };
+  
+  const totalWidth = width - padding.left - padding.right;
+  const barWidth = Math.min(40, (totalWidth / subjectStats.length) * 0.6);
+  const gap = (totalWidth - (barWidth * subjectStats.length)) / Math.max(1, subjectStats.length - 1);
+
+  return (
+    <div style={{ width: '100%', overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', minWidth: 350, height: 'auto', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10b981" />
+            <stop offset="100%" stopColor="#059669" />
+          </linearGradient>
+        </defs>
+        {[0, 25, 50, 75, 100].map(val => {
+          const y = height - padding.bottom - (val / 100) * (height - padding.top - padding.bottom);
+          return (
+            <g key={val}>
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#f1f5f9" strokeWidth="1" />
+              <text x={padding.left - 10} y={y + 4} textAnchor="end" style={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}>{val}%</text>
+            </g>
+          );
+        })}
+        {subjectStats.map((item, idx) => {
+          const x = padding.left + idx * (barWidth + gap) + (gap / 2);
+          const barHeight = (item.average / 100) * (height - padding.top - padding.bottom);
+          const y = height - padding.bottom - barHeight;
+          
+          return (
+            <g key={idx}>
+              <rect x={x} y={y} width={barWidth} height={barHeight} fill="url(#barGrad)" rx="3" />
+              <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" style={{ fontSize: 10, fill: '#047857', fontWeight: 700 }}>
+                {item.average}%
+              </text>
+              <text x={x + barWidth / 2} y={height - 10} textAnchor="middle" style={{ fontSize: 9, fill: '#475569', fontWeight: 600 }}>
+                {item.subject}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+const renderAttendanceTrendChart = (attendanceTrend) => {
+  if (!attendanceTrend || attendanceTrend.length === 0) {
+    return (
+      <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #e2e8f0', borderRadius: 8, color: '#94a3b8', fontSize: 13 }}>
+        No attendance data recorded this month.
+      </div>
+    );
+  }
+  const width = 500;
+  const height = 180;
+  const padding = { top: 20, right: 30, bottom: 30, left: 40 };
+
+  let runningPresents = 0;
+  const trendData = attendanceTrend.map((a, idx) => {
+    if (a.status === 'P') runningPresents++;
+    const score = Math.round((runningPresents / (idx + 1)) * 100);
+    return { date: a.date, score };
+  });
+
+  const points = trendData.map((t, idx) => {
+    const x = padding.left + (idx / Math.max(1, trendData.length - 1)) * (width - padding.left - padding.right);
+    const y = height - padding.bottom - (t.score / 100) * (height - padding.top - padding.bottom);
+    return { x, y, score: t.score, date: t.date };
+  });
+
+  const linePath = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaPath = trendData.length > 0 
+    ? `${linePath} L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`
+    : '';
+
+  return (
+    <div style={{ width: '100%', overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', minWidth: 350, height: 'auto', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="attGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10b981" stopOpacity="0.2"/>
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {[0, 25, 50, 75, 100].map(val => {
+          const y = height - padding.bottom - (val / 100) * (height - padding.top - padding.bottom);
+          return (
+            <g key={val}>
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#f1f5f9" strokeWidth="1" />
+              <text x={padding.left - 10} y={y + 4} textAnchor="end" style={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}>{val}%</text>
+            </g>
+          );
+        })}
+        {areaPath && <path d={areaPath} fill="url(#attGrad)" />}
+        {linePath && <path d={linePath} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+        {points.map((p, idx) => {
+          const shouldShowLabel = idx === 0 || idx === points.length - 1 || idx === Math.round(points.length / 2);
+          return (
+            <g key={idx}>
+              <circle cx={p.x} cy={p.y} r="3" fill="#10b981" />
+              {shouldShowLabel && (
+                <>
+                  <text x={p.x} y={p.y - 8} textAnchor="middle" style={{ fontSize: 9, fill: '#047857', fontWeight: 700 }}>
+                    {p.score}%
+                  </text>
+                  <text x={p.x} y={height - 10} textAnchor="middle" style={{ fontSize: 8, fill: '#64748b', fontWeight: 600 }}>
+                    {new Date(p.date).getDate()}
+                  </text>
+                </>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+const renderRankTrendChart = (rankHistory) => {
+  const validHistory = rankHistory.filter(h => h.rank !== null);
+  if (validHistory.length === 0) {
+    return (
+      <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #e2e8f0', borderRadius: 8, color: '#94a3b8', fontSize: 13 }}>
+        No ranking history available.
+      </div>
+    );
+  }
+  const maxRank = Math.max(...validHistory.map(h => h.rank)) + 2;
+  
+  const width = 500;
+  const height = 180;
+  const padding = { top: 20, right: 30, bottom: 30, left: 40 };
+
+  const points = rankHistory.map((h, idx) => {
+    const x = padding.left + (idx / Math.max(1, rankHistory.length - 1)) * (width - padding.left - padding.right);
+    const rankVal = h.rank !== null ? h.rank : maxRank;
+    const y = padding.top + ((rankVal - 1) / Math.max(1, maxRank - 1)) * (height - padding.top - padding.bottom);
+    return { x, y, rank: h.rank, month: h.month };
+  });
+
+  const linePoints = points.filter(p => p.rank !== null);
+  const linePath = linePoints.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+  return (
+    <div style={{ width: '100%', overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', minWidth: 350, height: 'auto', overflow: 'visible' }}>
+        {[1, Math.round(maxRank / 2), maxRank].map(val => {
+          const y = padding.top + ((val - 1) / Math.max(1, maxRank - 1)) * (height - padding.top - padding.bottom);
+          return (
+            <g key={val}>
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#f1f5f9" strokeWidth="1" />
+              <text x={padding.left - 10} y={y + 4} textAnchor="end" style={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}>#{val}</text>
+            </g>
+          );
+        })}
+        {linePath && <path d={linePath} fill="none" stroke="#7e22ce" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+        {points.map((p, idx) => {
+          const [yr, mn] = p.month.split('-');
+          const label = new Date(yr, mn - 1).toLocaleDateString('en-IN', { month: 'short' });
+          return (
+            <g key={idx}>
+              {p.rank !== null ? (
+                <>
+                  <circle cx={p.x} cy={p.y} r="4" fill="#7e22ce" stroke="#fff" strokeWidth="2" />
+                  <text x={p.x} y={p.y - 8} textAnchor="middle" style={{ fontSize: 10, fill: '#7e22ce', fontWeight: 700 }}>
+                    #{p.rank}
+                  </text>
+                </>
+              ) : (
+                <circle cx={p.x} cy={p.y} r="3" fill="#cbd5e1" />
+              )}
+              <text x={p.x} y={height - 10} textAnchor="middle" style={{ fontSize: 9, fill: '#64748b', fontWeight: 600 }}>
+                {label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
 export default function StudentPortal() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,6 +282,11 @@ export default function StudentPortal() {
   const [selectedStatsTest, setStatsTest] = useState(null);
   const [testStatsData, setTestStatsData] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [reportData, setReportData]       = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  
   const { user, logout }      = useAuth();
   const navigate              = useNavigate();
 
@@ -59,6 +316,53 @@ export default function StudentPortal() {
       .catch(() => toast.error('Failed to load your data'))
       .finally(() => setLoading(false));
   }, []);
+  
+  // Get list of months to populate month picker starting from the student's admission month
+  const getRecentMonthsList = (admissionDate) => {
+    const list = [];
+    const date = new Date();
+    const admissionYearMonth = admissionDate ? admissionDate.slice(0, 7) : null;
+    
+    // Loop back up to 36 months to verify all months since admission are available
+    for (let i = 0; i < 36; i++) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const val = `${year}-${month}`;
+      
+      // Stop including months older than the month of admission
+      if (admissionYearMonth && val < admissionYearMonth) {
+        break;
+      }
+      
+      list.push({ value: val, label: date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) });
+      date.setMonth(date.getMonth() - 1);
+    }
+    return list;
+  };
+  const monthsList = getRecentMonthsList(data?.student?.createdAt);
+
+  useEffect(() => {
+    if (tab === 'report' && !selectedMonth) {
+      const today = new Date();
+      setSelectedMonth(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`);
+    }
+  }, [tab, selectedMonth]);
+
+  useEffect(() => {
+    if (tab === 'report' && selectedMonth) {
+      setReportLoading(true);
+      testsAPI.studentMonthlyReport(selectedMonth)
+        .then(r => {
+          setReportData(r.data.data);
+        })
+        .catch(() => {
+          toast.error('Failed to load monthly report');
+        })
+        .finally(() => {
+          setReportLoading(false);
+        });
+    }
+  }, [tab, selectedMonth]);
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -133,7 +437,7 @@ export default function StudentPortal() {
   const initials = student.name.trim().split(/\s+/).map(w=>w[0].toUpperCase()).join('').slice(0,2);
 
   return (
-    <div style={{ minHeight:'100vh',background:'#f8fafc',fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif" }}>
+    <div style={{ height:'100vh',overflowY:'auto',background:'#f8fafc',fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif" }}>
 
       {/* ── TOPBAR ── */}
       <div style={{ background:'#0f2040',padding:'0 24px',display:'flex',alignItems:'center',justifyContent:'space-between',height:58,flexShrink:0 }}>
@@ -381,9 +685,273 @@ export default function StudentPortal() {
           </>
         )}
 
+        {/* ══ MONTHLY REPORT TAB ══════════════════════════════════ */}
+        {tab === 'report' && (
+          <div className="fade-in">
+            {/* Month selector */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Select Reporting Month:</span>
+                <select 
+                  value={selectedMonth} 
+                  onChange={e => setSelectedMonth(e.target.value)} 
+                  style={{ padding: '8px 14px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#0f172a', background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  {monthsList.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {reportLoading ? (
+              <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                <div style={{ width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite', marginBottom: 12 }} />
+                <div style={{ fontSize: 13, color: '#64748b' }}>Generating monthly performance report...</div>
+              </div>
+            ) : reportData ? (
+              (() => {
+                const { overview, charts, statistics, insights } = reportData;
+                
+                // MoM Calculations
+                const attDiff = overview.attendancePct - overview.prevAttendancePct;
+                const scoreDiff = overview.averageScore - overview.prevAverageScore;
+                
+                let rankDiffLabel = '';
+                let rankDiffColor = '#64748b';
+                if (overview.currentRank && overview.prevRank) {
+                  const diff = overview.prevRank - overview.currentRank;
+                  if (diff > 0) {
+                    rankDiffLabel = `↑ Improved by ${diff} pos`;
+                    rankDiffColor = '#16a34a';
+                  } else if (diff < 0) {
+                    rankDiffLabel = `↓ Declined by ${Math.abs(diff)} pos`;
+                    rankDiffColor = '#dc2626';
+                  } else {
+                    rankDiffLabel = 'No change';
+                  }
+                } else if (overview.currentRank) {
+                  rankDiffLabel = 'Initial ranking';
+                  rankDiffColor = '#2563eb';
+                } else {
+                  rankDiffLabel = '—';
+                }
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    
+                    {/* Performance Overview Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                      
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Attendance Rate</div>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>{overview.attendancePct}%</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: attDiff >= 0 ? '#16a34a' : '#dc2626', marginTop: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
+                          {attDiff >= 0 ? `▲ +${attDiff}%` : `▼ ${attDiff}%`} <span style={{ color: '#94a3b8', fontWeight: 500 }}>MoM</span>
+                        </div>
+                      </div>
+
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Average Test Score</div>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>{overview.averageScore}%</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: scoreDiff >= 0 ? '#16a34a' : '#dc2626', marginTop: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
+                          {scoreDiff >= 0 ? `▲ +${scoreDiff}%` : `▼ ${scoreDiff}%`} <span style={{ color: '#94a3b8', fontWeight: 500 }}>MoM</span>
+                        </div>
+                      </div>
+
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Batch Ranking</div>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>
+                          {overview.currentRank ? `#${overview.currentRank}` : '—'}
+                          <span style={{ fontSize: 14, color: '#94a3b8', fontWeight: 500 }}> / {overview.totalStudents || 0}</span>
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: rankDiffColor, marginTop: 6 }}>
+                          {rankDiffLabel}
+                        </div>
+                      </div>
+
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Tests Attempted</div>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>{overview.testsAttempted}</div>
+                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                          Compared to <strong style={{ color: '#64748b' }}>{overview.prevTestsAttempted}</strong> last month
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Charts Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+                      
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>📈 Test Marks Trend</div>
+                        {renderTestTrendChart(charts.testTrend)}
+                      </div>
+
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>📊 Subject-Wise Average</div>
+                        {renderSubjectBarChart(charts.subjectStats)}
+                      </div>
+
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>📅 Attendance Running Average Trend</div>
+                        {renderAttendanceTrendChart(charts.attendanceTrend)}
+                      </div>
+
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>👑 6-Month Batch Rank Trend</div>
+                        {renderRankTrendChart(charts.rankHistory)}
+                      </div>
+
+                    </div>
+
+                    {/* Comparison Chart & Insights */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+                      
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 16 }}>🔄 Month-over-Month Comparison</div>
+                        
+                        <div style={{ marginBottom: 20 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+                            <span>Average Marks</span>
+                            <span>{overview.averageScore}% vs {overview.prevAverageScore}%</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ width: 50, fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>Current</span>
+                              <div style={{ flex: 1, height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${overview.averageScore}%`, background: '#2563eb', borderRadius: 5 }} />
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ width: 50, fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>Previous</span>
+                              <div style={{ flex: 1, height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${overview.prevAverageScore}%`, background: '#cbd5e1', borderRadius: 5 }} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+                            <span>Attendance Rate</span>
+                            <span>{overview.attendancePct}% vs {overview.prevAttendancePct}%</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ width: 50, fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>Current</span>
+                              <div style={{ flex: 1, height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${overview.attendancePct}%`, background: '#10b981', borderRadius: 5 }} />
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ width: 50, fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>Previous</span>
+                              <div style={{ flex: 1, height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${overview.prevAttendancePct}%`, background: '#cbd5e1', borderRadius: 5 }} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+
+                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>💡 Performance Insights</div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 12 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Strongest Subject</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#14532d', marginTop: 4 }}>{insights.strongestSubject}</div>
+                          </div>
+                          
+                          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 12 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.5 }}>Needs Work</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#7f1d1d', marginTop: 4 }}>{insights.weakestSubject}</div>
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Actionable Observations</div>
+                        <ul style={{ paddingLeft: 16, margin: 0, fontSize: 12, color: '#475569', lineHeight: 1.6, flex: 1 }}>
+                          {insights.observations.map((obs, idx) => (
+                            <li key={idx} style={{ marginBottom: 6 }}>{obs}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                    </div>
+
+                    {/* Monthly Statistics Breakdown Table */}
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>📋 Monthly Statistics Breakdown</div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 24 }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Attendance Metrics</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 4 }}>
+                              <span style={{ color: '#64748b' }}>Total Classes Conducted:</span>
+                              <strong style={{ color: '#334155' }}>{statistics.totalDays}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 4 }}>
+                              <span style={{ color: '#64748b' }}>Classes Attended:</span>
+                              <strong style={{ color: '#16a34a' }}>{statistics.presentDays}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 4 }}>
+                              <span style={{ color: '#64748b' }}>Classes Missed:</span>
+                              <strong style={{ color: '#dc2626' }}>{statistics.absentDays}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: '#64748b' }}>Late Arrivals:</span>
+                              <strong style={{ color: '#d97706' }}>{statistics.lateDays}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Academic Metrics</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 4 }}>
+                              <span style={{ color: '#64748b' }}>Average Score:</span>
+                              <strong style={{ color: '#2563eb' }}>{overview.averageScore}%</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 4 }}>
+                              <span style={{ color: '#64748b' }}>Highest Test Score:</span>
+                              <strong style={{ color: '#16a34a' }}>{overview.highestScore !== null ? `${overview.highestScore}%` : '—'}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: '#64748b' }}>Lowest Test Score:</span>
+                              <strong style={{ color: '#dc2626' }}>{overview.lowestScore !== null ? `${overview.lowestScore}%` : '—'}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })()
+            ) : (
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '50px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📅</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#334155' }}>No report data found for this month</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Please try choosing another month from the picker.</div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ══ MORE TAB ══════════════════════════════════════════ */}
         {tab === 'more' && (
           <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))',gap:16 }}>
+            {/* Monthly Report Card */}
+            <div onClick={() => setTab('report')} style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:'24px',cursor:'pointer',transition:'transform 0.2s,boxShadow 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',display:'flex',alignItems:'center',gap:16 }} onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; }}>
+              <div style={{ width:48,height:48,borderRadius:'50%',background:'#f0fdfa',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24 }}>📋</div>
+              <div>
+                <div style={{ fontSize:16,fontWeight:700,color:'#0f172a' }}>Monthly Report</div>
+                <div style={{ fontSize:13,color:'#64748b',marginTop:4 }}>Monthly performance & insights</div>
+              </div>
+            </div>
+
             {/* Contact Faculty Card */}
             <div onClick={() => setMeetingModal(true)} style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:'24px',cursor:'pointer',transition:'transform 0.2s,boxShadow 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',display:'flex',alignItems:'center',gap:16 }} onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; }}>
               <div style={{ width:48,height:48,borderRadius:'50%',background:'#eff6ff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24 }}>👨‍🏫</div>
