@@ -54,6 +54,50 @@ router.get('/', instituteOnly, async (req, res) => {
   } catch(err) { res.status(500).json({ success:false, message:err.message }); }
 });
 
+// ── GET STUDENT PROFILE ─────────────────────────────────────────
+router.get('/profile', studentSelf, async (req, res) => {
+  try {
+    // 1. Fetch student + institute
+    const [rows] = await db.query(
+      `SELECT s.*, 
+              i.name AS inst_name, i.description AS inst_desc, i.website AS inst_website, 
+              i.principal_name AS inst_principal, i.establishment_year AS inst_est, 
+              i.achievements AS inst_achievements, i.awards AS inst_awards, 
+              i.phone AS inst_phone, i.email AS inst_email
+       FROM students s
+       JOIN institutes i ON i.id = s.institute_id
+       WHERE s.id = ?`,
+      [req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ success: false, message: 'Student not found' });
+    const student = rows[0];
+
+    // 2. Fetch fee info
+    const [[feesPaidResult]] = await db.query(
+      'SELECT SUM(amount) as paid FROM fee_payments WHERE student_id = ?',
+      [req.user.id]
+    );
+    const feesPaid = feesPaidResult.paid || 0;
+
+    // 3. Fetch fee history
+    const [feeHistory] = await db.query(
+      'SELECT * FROM fee_payments WHERE student_id = ? ORDER BY payment_date DESC',
+      [req.user.id]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        student,
+        feesPaid,
+        feeHistory
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── GET SINGLE STUDENT (with attendance summary) ──────────────
 router.get('/:id', instituteOnly, async (req, res) => {
   try {

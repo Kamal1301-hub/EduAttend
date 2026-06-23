@@ -169,7 +169,7 @@ function Avatar({ name, size=36 }) {
 }
 
 // ─── FORM BLANK ───────────────────────────────────────────────
-const BLANK = { name:'', city:'', state:'', email:'', phone:'', contactPerson:'', plan:'Standard', durationMonths:'12', status:'Active', expiryDate:'' };
+const BLANK = { name:'', city:'', state:'', email:'', phone:'', contactPerson:'', principalName:'', establishmentYear:'', website:'', description:'', achievements:'', awards:'', plan:'Standard', durationMonths:'12', status:'Active', expiryDate:'' };
 
 // ═══════════════════════════════════════════════════════════════════
 //  MAIN COMPONENT
@@ -252,7 +252,7 @@ export default function AdminInstitutes() {
 
   // ── EDIT ──────────────────────────────────────────────────────
   const openEdit = inst => {
-    setForm({ name:inst.name||'', city:inst.city||'', state:inst.state||'', email:inst.email||'', phone:inst.phone||'', contactPerson:inst.contact_person||'', plan:inst.plan||'Standard', status:inst.status||'Active', expiryDate:inst.expiry_date||'', durationMonths:'12' });
+    setForm({ name:inst.name||'', city:inst.city||'', state:inst.state||'', email:inst.email||'', phone:inst.phone||'', contactPerson:inst.contact_person||'', principalName:inst.principal_name||'', establishmentYear:inst.establishment_year||'', website:inst.website||'', description:inst.description||'', achievements:inst.achievements||'', awards:inst.awards||'', plan:inst.plan||'Standard', status:inst.status||'Active', expiryDate:inst.expiry_date||'', durationMonths:'12' });
     setErrs({});
     setEditData(inst);
   };
@@ -482,6 +482,15 @@ export default function AdminInstitutes() {
             <Field label="Phone Number" required error={errs.phone}><Input value={form.phone} onChange={f('phone')} placeholder="10-digit number" /></Field>
           </Row2>
           <Field label="Email Address" error={errs.email}><Input type="email" value={form.email} onChange={f('email')} placeholder="official@institute.com" /></Field>
+          <Divider label="Additional Details" />
+          <Row2>
+            <Field label="Principal Name"><Input value={form.principalName} onChange={f('principalName')} /></Field>
+            <Field label="Establishment Year"><Input type="number" value={form.establishmentYear} onChange={f('establishmentYear')} /></Field>
+          </Row2>
+          <Field label="Website"><Input value={form.website} onChange={f('website')} placeholder="https://" /></Field>
+          <Field label="Description"><textarea value={form.description} onChange={f('description')} style={{ width:'100%', padding:'9px 12px', background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:9, color:'#0f172a', fontFamily:'inherit', minHeight:60 }} /></Field>
+          <Field label="Achievements"><textarea value={form.achievements} onChange={f('achievements')} style={{ width:'100%', padding:'9px 12px', background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:9, color:'#0f172a', fontFamily:'inherit', minHeight:60 }} /></Field>
+          <Field label="Awards & Recognitions"><textarea value={form.awards} onChange={f('awards')} style={{ width:'100%', padding:'9px 12px', background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:9, color:'#0f172a', fontFamily:'inherit', minHeight:60 }} /></Field>
           <Divider label="Subscription" />
           <Row2>
             <Field label="Plan"><Sel value={form.plan} onChange={f('plan')}><option>Basic</option><option>Standard</option><option>Premium</option></Sel></Field>
@@ -526,6 +535,15 @@ export default function AdminInstitutes() {
             <Field label="Phone" required error={errs.phone}><Input value={form.phone} onChange={f('phone')} /></Field>
           </Row2>
           <Field label="Email" error={errs.email}><Input type="email" value={form.email} onChange={f('email')} /></Field>
+          <Divider label="Additional Details" />
+          <Row2>
+            <Field label="Principal Name"><Input value={form.principalName} onChange={f('principalName')} /></Field>
+            <Field label="Establishment Year"><Input type="number" value={form.establishmentYear} onChange={f('establishmentYear')} /></Field>
+          </Row2>
+          <Field label="Website"><Input value={form.website} onChange={f('website')} /></Field>
+          <Field label="Description"><textarea value={form.description} onChange={f('description')} style={{ width:'100%', padding:'9px 12px', background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:9, color:'#0f172a', fontFamily:'inherit', minHeight:60 }} /></Field>
+          <Field label="Achievements"><textarea value={form.achievements} onChange={f('achievements')} style={{ width:'100%', padding:'9px 12px', background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:9, color:'#0f172a', fontFamily:'inherit', minHeight:60 }} /></Field>
+          <Field label="Awards & Recognitions"><textarea value={form.awards} onChange={f('awards')} style={{ width:'100%', padding:'9px 12px', background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:9, color:'#0f172a', fontFamily:'inherit', minHeight:60 }} /></Field>
           <Divider label="Subscription & Access" />
           <Row2>
             <Field label="Plan"><Sel value={form.plan} onChange={f('plan')}><option>Basic</option><option>Standard</option><option>Premium</option></Sel></Field>
@@ -561,6 +579,9 @@ export default function AdminInstitutes() {
             ['City',           viewData.city],
             ['State',          viewData.state],
             ['Contact Person', viewData.contact_person],
+            ['Principal',      viewData.principal_name],
+            ['Website',        viewData.website],
+            ['Est. Year',      viewData.establishment_year],
             ['Phone',          viewData.phone],
             ['Email',          viewData.email],
             ['Join Date',      viewData.join_date],

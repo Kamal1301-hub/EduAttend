@@ -69,7 +69,7 @@ router.get('/logs/all', superAdminOnly, async (req, res) => {
 router.get('/', superAdminOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT id, code, name, city, state, email, phone, contact_person,
+      `SELECT id, code, name, description, website, principal_name, establishment_year, achievements, awards, city, state, email, phone, contact_person,
               plan, status, login_id, join_date, expiry_date, students_count, created_at
        FROM institutes
        ORDER BY created_at DESC`
@@ -85,7 +85,7 @@ router.get('/', superAdminOnly, async (req, res) => {
 router.get('/:id', superAdminOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT id, code, name, city, state, email, phone, contact_person,
+      `SELECT id, code, name, description, website, principal_name, establishment_year, achievements, awards, city, state, email, phone, contact_person,
               plan, status, login_id, join_date, expiry_date, students_count
        FROM institutes WHERE id = ?`,
       [req.params.id]
@@ -101,7 +101,7 @@ router.get('/:id', superAdminOnly, async (req, res) => {
 // POST /api/institutes
 router.post('/', superAdminOnly, async (req, res) => {
   try {
-    const { name, city, state, email, phone, contactPerson, plan, durationMonths } = req.body;
+    const { name, description, website, principal_name, establishment_year, achievements, awards, city, state, email, phone, contactPerson, plan, durationMonths } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Institute name is required' });
     }
@@ -114,11 +114,17 @@ router.post('/', superAdminOnly, async (req, res) => {
     // Insert with TEMP placeholders first to get the auto-increment ID
     const [result] = await db.query(
       `INSERT INTO institutes
-         (code, name, city, state, email, phone, contact_person, plan, status, login_id, password, join_date, expiry_date, students_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, 0)`,
+         (code, name, description, website, principal_name, establishment_year, achievements, awards, city, state, email, phone, contact_person, plan, status, login_id, password, join_date, expiry_date, students_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, 0)`,
       [
         'TEMP',
         name.trim(),
+        description || '',
+        website     || '',
+        principal_name || '',
+        establishment_year || null,
+        achievements || '',
+        awards      || '',
         city        || '',
         state       || '',
         email       || '',
@@ -187,15 +193,21 @@ router.put('/:id', superAdminOnly, async (req, res) => {
     if (!rows.length) return res.status(404).json({ success: false, message: 'Institute not found' });
     const existing = rows[0];
 
-    const { name, city, state, email, phone, contactPerson, plan, status, expiryDate } = req.body;
+    const { name, description, website, principal_name, establishment_year, achievements, awards, city, state, email, phone, contactPerson, plan, status, expiryDate } = req.body;
 
     await db.query(
       `UPDATE institutes
-       SET name=?, city=?, state=?, email=?, phone=?, contact_person=?,
+       SET name=?, description=?, website=?, principal_name=?, establishment_year=?, achievements=?, awards=?, city=?, state=?, email=?, phone=?, contact_person=?,
            plan=?, status=?, expiry_date=?, updated_at=NOW()
        WHERE id=?`,
       [
         name          || existing.name,
+        description   !== undefined ? description   : existing.description,
+        website       !== undefined ? website       : existing.website,
+        principal_name !== undefined ? principal_name : existing.principal_name,
+        establishment_year !== undefined ? establishment_year : existing.establishment_year,
+        achievements  !== undefined ? achievements  : existing.achievements,
+        awards        !== undefined ? awards        : existing.awards,
         city          !== undefined ? city          : existing.city,
         state         !== undefined ? state         : existing.state,
         email         !== undefined ? email         : existing.email,

@@ -287,6 +287,11 @@ export default function StudentPortal() {
   const [reportData, setReportData]       = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   
+  const [profileData, setProfileData]     = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [pwdLoading, setPwdLoading] = useState(false);
+  
   const { user, logout }      = useAuth();
   const navigate              = useNavigate();
 
@@ -363,6 +368,33 @@ export default function StudentPortal() {
         });
     }
   }, [tab, selectedMonth]);
+
+  useEffect(() => {
+    if (tab === 'profile' && !profileData && !profileLoading) {
+      setProfileLoading(true);
+      studentsAPI.getProfile()
+        .then(r => setProfileData(r.data.data))
+        .catch(() => toast.error('Failed to load profile data'))
+        .finally(() => setProfileLoading(false));
+    }
+  }, [tab, profileData, profileLoading]);
+
+  const handlePwdChange = async (e) => {
+    e.preventDefault();
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) {
+      return toast.error('New passwords do not match');
+    }
+    setPwdLoading(true);
+    try {
+      await studentsAPI.changePassword({ currentPassword: pwdForm.currentPassword, newPassword: pwdForm.newPassword });
+      toast.success('Password changed successfully!');
+      setPwdForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to change password');
+    } finally {
+      setPwdLoading(false);
+    }
+  };
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -943,6 +975,15 @@ export default function StudentPortal() {
         {/* ══ MORE TAB ══════════════════════════════════════════ */}
         {tab === 'more' && (
           <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))',gap:16 }}>
+            {/* Profile Card */}
+            <div onClick={() => setTab('profile')} style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:'24px',cursor:'pointer',transition:'transform 0.2s,boxShadow 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',display:'flex',alignItems:'center',gap:16 }} onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; }}>
+              <div style={{ width:48,height:48,borderRadius:'50%',background:'#f5f3ff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24 }}>👤</div>
+              <div>
+                <div style={{ fontSize:16,fontWeight:700,color:'#0f172a' }}>Profile</div>
+                <div style={{ fontSize:13,color:'#64748b',marginTop:4 }}>Student & Institute Details</div>
+              </div>
+            </div>
+
             {/* Monthly Report Card */}
             <div onClick={() => setTab('report')} style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:'24px',cursor:'pointer',transition:'transform 0.2s,boxShadow 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',display:'flex',alignItems:'center',gap:16 }} onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; }}>
               <div style={{ width:48,height:48,borderRadius:'50%',background:'#f0fdfa',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24 }}>📋</div>
@@ -978,6 +1019,117 @@ export default function StudentPortal() {
                 <div style={{ fontSize:13,color:'#64748b',marginTop:4 }}>View fee structure & due dates</div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ══ PROFILE TAB ═══════════════════════════════════════ */}
+        {tab === 'profile' && (
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+              <button onClick={()=>setTab('more')} style={{ background:'transparent',border:'none',color:'#64748b',fontSize:14,cursor:'pointer',display:'flex',alignItems:'center',gap:4 }}>
+                <span>←</span> Back to Options
+              </button>
+            </div>
+            
+            {profileLoading || !profileData ? (
+              <div style={{ padding:60,textAlign:'center' }}>
+                <div style={{ width:32,height:32,border:'3px solid #e2e8f0',borderTopColor:'#2563eb',borderRadius:'50%',animation:'spin 0.8s linear infinite',margin:'0 auto 14px' }} />
+                <div style={{ fontSize:13,color:'#94a3b8' }}>Loading profile…</div>
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+                {/* Student Profile Card */}
+                <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:'24px',boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+                  <div style={{ fontSize:18,fontWeight:700,color:'#0f172a',marginBottom:16,display:'flex',alignItems:'center',gap:8 }}><span style={{ fontSize:20 }}>👤</span> Student Profile</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))', gap:16, fontSize:14 }}>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Student Name</span><span style={{ fontWeight:600,color:'#0f172a' }}>{profileData.student.name}</span></div>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Student Contact Number</span><span style={{ fontWeight:600,color:'#0f172a' }}>{profileData.student.student_phone || '—'}</span></div>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Class</span><span style={{ fontWeight:600,color:'#0f172a' }}>{profileData.student.class}</span></div>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Stream</span><span style={{ fontWeight:600,color:'#0f172a' }}>{profileData.student.stream || '—'}</span></div>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Board</span><span style={{ fontWeight:600,color:'#0f172a' }}>{profileData.student.board}</span></div>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Parent/Guardian Name</span><span style={{ fontWeight:600,color:'#0f172a' }}>{profileData.student.parent_name}</span></div>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Parent Contact Number</span><span style={{ fontWeight:600,color:'#0f172a' }}>{profileData.student.parent_phone}</span></div>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Parent Email</span><span style={{ fontWeight:600,color:'#0f172a' }}>{profileData.student.parent_email || '—'}</span></div>
+                    <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Unique Login ID</span><code style={{ background:'#f1f5f9',padding:'2px 6px',borderRadius:4,fontSize:13,color:'#1d4ed8' }}>{profileData.student.student_login_id}</code></div>
+                  </div>
+                </div>
+
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:20 }}>
+                  {/* Fee Summary */}
+                  <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:'24px',boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+                    <div style={{ fontSize:18,fontWeight:700,color:'#0f172a',marginBottom:16,display:'flex',alignItems:'center',gap:8 }}><span style={{ fontSize:20 }}>💳</span> Fee Summary</div>
+                    <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 0',borderBottom:'1px solid #f1f5f9' }}>
+                      <span style={{ color:'#64748b',fontSize:14 }}>Total Fees</span>
+                      <span style={{ fontWeight:700,fontSize:16,color:'#0f172a' }}>₹{profileData.student.total_fees}</span>
+                    </div>
+                    <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 0',borderBottom:'1px solid #f1f5f9' }}>
+                      <span style={{ color:'#64748b',fontSize:14 }}>Fees Paid</span>
+                      <span style={{ fontWeight:700,fontSize:16,color:'#16a34a' }}>₹{profileData.feesPaid}</span>
+                    </div>
+                    <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 0' }}>
+                      <span style={{ color:'#64748b',fontSize:14 }}>Remaining Balance</span>
+                      <span style={{ fontWeight:700,fontSize:16,color:'#dc2626' }}>₹{Math.max(0, profileData.student.total_fees - profileData.feesPaid)}</span>
+                    </div>
+                  </div>
+
+                  {/* Change Password */}
+                  <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:'24px',boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+                    <div style={{ fontSize:18,fontWeight:700,color:'#0f172a',marginBottom:16,display:'flex',alignItems:'center',gap:8 }}><span style={{ fontSize:20 }}>🔒</span> Change Password</div>
+                    <form onSubmit={handlePwdChange} style={{ display:'flex',flexDirection:'column',gap:12 }}>
+                      <div>
+                        <div style={{ fontSize:12,color:'#64748b',marginBottom:4 }}>Current Password</div>
+                        <input type="password" value={pwdForm.currentPassword} onChange={e=>setPwdForm(p=>({...p, currentPassword:e.target.value}))} required style={{ width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:14,boxSizing:'border-box' }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize:12,color:'#64748b',marginBottom:4 }}>New Password</div>
+                        <input type="password" value={pwdForm.newPassword} onChange={e=>setPwdForm(p=>({...p, newPassword:e.target.value}))} required minLength={6} style={{ width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:14,boxSizing:'border-box' }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize:12,color:'#64748b',marginBottom:4 }}>Confirm New Password</div>
+                        <input type="password" value={pwdForm.confirmPassword} onChange={e=>setPwdForm(p=>({...p, confirmPassword:e.target.value}))} required minLength={6} style={{ width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:14,boxSizing:'border-box' }} />
+                      </div>
+                      <button type="submit" disabled={pwdLoading} style={{ marginTop:8,padding:'10px',background:'#2563eb',color:'#fff',border:'none',borderRadius:8,fontWeight:600,cursor:pwdLoading?'not-allowed':'pointer' }}>
+                        {pwdLoading ? 'Updating...' : 'Update Password'}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                {/* Institute Details Section */}
+                <div style={{ background:'#fff',border:'1px solid #e2e8f0',borderRadius:16,padding:'24px',boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+                  <div style={{ fontSize:24,fontWeight:800,color:'#1e3a8a',marginBottom:16 }}>{profileData.student.inst_name}</div>
+                  
+                  {profileData.student.inst_desc && (
+                    <div style={{ fontSize:14,color:'#475569',marginBottom:20,lineHeight:1.6 }}>{profileData.student.inst_desc}</div>
+                  )}
+
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:16, marginBottom:20 }}>
+                    {profileData.student.inst_principal && <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Principal / Director</span><span style={{ fontWeight:600,color:'#0f172a',fontSize:14 }}>{profileData.student.inst_principal}</span></div>}
+                    {profileData.student.inst_phone && <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Contact Number</span><span style={{ fontWeight:600,color:'#0f172a',fontSize:14 }}>{profileData.student.inst_phone}</span></div>}
+                    {profileData.student.inst_email && <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Email Address</span><span style={{ fontWeight:600,color:'#0f172a',fontSize:14 }}>{profileData.student.inst_email}</span></div>}
+                    {profileData.student.inst_website && <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Website</span><a href={profileData.student.inst_website} target="_blank" rel="noreferrer" style={{ fontWeight:600,color:'#2563eb',fontSize:14,textDecoration:'none' }}>{profileData.student.inst_website}</a></div>}
+                    {profileData.student.inst_est && <div><span style={{ color:'#64748b',fontSize:12,display:'block' }}>Established</span><span style={{ fontWeight:600,color:'#0f172a',fontSize:14 }}>{profileData.student.inst_est}</span></div>}
+                  </div>
+
+                  {(profileData.student.inst_achievements || profileData.student.inst_awards) && (
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:20, marginTop:16, paddingTop:20, borderTop:'1px solid #f1f5f9' }}>
+                      {profileData.student.inst_achievements && (
+                        <div>
+                          <div style={{ fontSize:15,fontWeight:700,color:'#0f172a',marginBottom:8,display:'flex',alignItems:'center',gap:6 }}><span>🏆</span> Achievements</div>
+                          <div style={{ fontSize:14,color:'#475569',whiteSpace:'pre-line',lineHeight:1.6 }}>{profileData.student.inst_achievements}</div>
+                        </div>
+                      )}
+                      {profileData.student.inst_awards && (
+                        <div>
+                          <div style={{ fontSize:15,fontWeight:700,color:'#0f172a',marginBottom:8,display:'flex',alignItems:'center',gap:6 }}><span>🎖️</span> Awards & Recognitions</div>
+                          <div style={{ fontSize:14,color:'#475569',whiteSpace:'pre-line',lineHeight:1.6 }}>{profileData.student.inst_awards}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

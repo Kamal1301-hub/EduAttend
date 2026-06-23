@@ -68,6 +68,7 @@ export const studentsAPI = {
   requestMeeting: (data) => API.post('/students/meeting-request', data),
   getFeeHistory: (id) => API.get(`/students/${id}/fees`),
   addFeePayment: (id, data) => API.post(`/students/${id}/fees`, data),
+  getProfile: () => API.get('/students/profile'),
 };
 
 // ─── ATTENDANCE (Institute) ────────────────────────────────────
