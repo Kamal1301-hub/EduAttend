@@ -325,7 +325,7 @@ export default function AdminInstitutes() {
         <div style={{ padding:'20px 24px' }}>
 
           {/* STATS */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:20 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:12, marginBottom:20 }}>
             {[
               { label:'Total Institutes', value:stats.total,    color:'#0f172a' },
               { label:'Active',           value:stats.active,   color:'#16a34a' },

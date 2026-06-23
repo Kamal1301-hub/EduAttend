@@ -531,7 +531,7 @@ export default function StudentPortal() {
         </div>
 
         {/* ── TABS ── */}
-        <div style={{ display:'flex',gap:0,background:'#f1f5f9',borderRadius:12,padding:4,marginBottom:20 }}>
+        <div style={{ display:'flex',flexWrap:'wrap',gap:0,background:'#f1f5f9',borderRadius:12,padding:4,marginBottom:20 }}>
           {[
             { id:'attendance', icon:'✅', label:'Attendance' },
             { id:'results',    icon:'📊', label:'Test Results' },
@@ -548,7 +548,7 @@ export default function StudentPortal() {
         {tab === 'attendance' && (
           <>
             {/* Summary cards */}
-            <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20 }}>
+            <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))',gap:12,marginBottom:20 }}>
               {[
                 { label:'Total Days', value:att.total,   color:'#0f172a' },
                 { label:'Present',   value:att.present, color:'#16a34a' },
@@ -634,7 +634,7 @@ export default function StudentPortal() {
           <>
             {/* Summary */}
             {totalTests > 0 && (
-              <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:20 }}>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))',gap:12,marginBottom:20 }}>
                 {[
                   { label:'Tests Taken', value:totalTests, color:'#0f172a' },
                   { label:'Average Score', value:`${avgMarks}%`, color:pctColor(avgMarks) },

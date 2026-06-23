@@ -204,11 +204,11 @@ tr:hover td { background: var(--bg); }
 
 /* ─── RESPONSIVE: MOBILE (< 768px) ──────────────────────── */
 @media (max-width: 767px) {
-  body { overflow: auto; }
+  body { overflow: auto; height: auto; }
   #root { height: auto; min-height: 100vh; }
 
   /* Sidebar slides in/out on mobile */
-  .shell { display: block; position: relative; }
+  .shell { display: block; position: relative; height: auto; min-height: 100vh; overflow: visible; }
   .sidebar {
     position: fixed; top: 0; left: 0; bottom: 0;
     transform: translateX(-100%);
@@ -218,7 +218,7 @@ tr:hover td { background: var(--bg); }
   .sidebar.open { transform: translateX(0); }
   .sb-toggle { display: flex; }
   .sb-overlay.show { display: block; }
-  .main-area { width: 100%; min-height: 100vh; padding-top: 52px; }
+  .main-area { width: 100%; min-height: 100vh; height: auto; overflow: visible; padding-top: 52px; }
 
   /* Stats */
   .stats-5 { grid-template-columns: repeat(2, 1fr); }

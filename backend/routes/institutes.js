@@ -101,7 +101,7 @@ router.get('/:id', superAdminOnly, async (req, res) => {
 // POST /api/institutes
 router.post('/', superAdminOnly, async (req, res) => {
   try {
-    const { name, description, website, principal_name, establishment_year, achievements, awards, city, state, email, phone, contactPerson, plan, durationMonths } = req.body;
+    const { name, description, website, principalName, establishmentYear, achievements, awards, city, state, email, phone, contactPerson, plan, durationMonths } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Institute name is required' });
     }
@@ -121,8 +121,8 @@ router.post('/', superAdminOnly, async (req, res) => {
         name.trim(),
         description || '',
         website     || '',
-        principal_name || '',
-        establishment_year || null,
+        principalName || '',
+        establishmentYear || null,
         achievements || '',
         awards      || '',
         city        || '',
@@ -193,7 +193,7 @@ router.put('/:id', superAdminOnly, async (req, res) => {
     if (!rows.length) return res.status(404).json({ success: false, message: 'Institute not found' });
     const existing = rows[0];
 
-    const { name, description, website, principal_name, establishment_year, achievements, awards, city, state, email, phone, contactPerson, plan, status, expiryDate } = req.body;
+    const { name, description, website, principalName, establishmentYear, achievements, awards, city, state, email, phone, contactPerson, plan, status, expiryDate } = req.body;
 
     await db.query(
       `UPDATE institutes
@@ -204,8 +204,8 @@ router.put('/:id', superAdminOnly, async (req, res) => {
         name          || existing.name,
         description   !== undefined ? description   : existing.description,
         website       !== undefined ? website       : existing.website,
-        principal_name !== undefined ? principal_name : existing.principal_name,
-        establishment_year !== undefined ? establishment_year : existing.establishment_year,
+        principalName !== undefined ? principalName : existing.principal_name,
+        establishmentYear !== undefined ? establishmentYear : existing.establishment_year,
         achievements  !== undefined ? achievements  : existing.achievements,
         awards        !== undefined ? awards        : existing.awards,
         city          !== undefined ? city          : existing.city,

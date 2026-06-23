@@ -458,7 +458,7 @@ export default function InstTests() {
         <div style={{ padding:'20px 24px' }}>
 
           {/* Stats */}
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:20 }}>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))',gap:12,marginBottom:20 }}>
             {[
               { label:'Total Tests', value:tests.length, color:'#0f172a' },
               { label:'With Results', value:tests.filter(t=>t.results_entered>0).length, color:'#16a34a' },
@@ -774,7 +774,7 @@ export default function InstTests() {
             const highest = Math.max(...done.map(s=>parseFloat(s.marks_scored)));
             const lowest  = Math.min(...done.map(s=>parseFloat(s.marks_scored)));
             return (
-              <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:16 }}>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))',gap:10,marginBottom:16 }}>
                 {[
                   { label:'Entered', value:`${done.length}/${viewTest.students.length}`, color:'#2563eb' },
                   { label:'Average', value:`${avg}/${viewTest.total_marks}`, color:'#0f766e' },

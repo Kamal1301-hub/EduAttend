@@ -132,7 +132,7 @@ export default function AdminLogin() {
           </div>
         </div>
 
-        <div style={{ marginTop: 40, display: 'flex', gap: 30, color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        <div style={{ marginTop: 40, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '15px 30px', color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ShieldCheck size={14} /> Enterprise Security</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Database size={14} /> Multi-Tenant</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={14} /> High Availability</div>
